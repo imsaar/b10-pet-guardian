@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Ben 10: Pet Guardians</title>
+  <style>
+     body{margin:0;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif}
+     canvas{background:#222;display:block;margin:0 auto;border:2px solid #0ff}
+     #hud{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:18px}
+  </style>
+</head>
+<body>
+  <canvas id="game" width="800" height="600"></canvas>
+  <div id="hud">Health: <span id="hp">100</span> | Wave: <span id="wave">1</span></div>
+
+<script>
+/* ---------- GLOBALS ---------- */
+const cvs = document.getElementById('game'), ctx = cvs.getContext('2d');
+const keys = {};
+window.onkeydown = e => keys[e.code] = true;
+window.onkeyup   = e => keys[e.code] = false;
+let mouse = {x:0,y:0};
+cvs.onmousemove = e => { const r=cvs.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top; };
+cvs.oncontextmenu = e => e.preventDefault();
+
+/* ---------- ASSETS (tiny inline sprites) ---------- */
+const sprites = {
+  ben:  {w:32,h:48,color:'#2a5'},
+  heatblast: {w:40,h:50,color:'#f50'},
+  fourarms:  {w:50,h:60,color:'#c55'},
+  xlr8:      {w:36,h:46,color:'#0cf'},
+  cannonbolt:{w:44,h:44,color:'#fb0'},
+  bot:       {w:30,h:30,color:'#a0a'},
+  pet:       {w:20,h:20,color:'#5f5'}
+};
+
+/* ---------- PLAYER ---------- */
+const player = {
+  x:400,y:300, hp:100, maxHp:100, speed:4,
+  form:'ben', cooldown:0,
+  pets:[
+    {type:'stinkfly', x:0,y:0, cooldown:0},
+    {type:'heatblast',x:0,y:0, cooldown:0},
+    {type:'grey',     x:0,y:0, cooldown:0}
+  ]
+};
+
+/* ---------- ALIENS ---------- */
+const aliens = {
+  ben:       {hp:100,speed:4,atk:10,color:'#2a5'},
+  heatblast: {hp:120,speed:3,atk:18,color:'#f50',range:220},
+  fourarms:  {hp:150,speed:3,atk:25,color:'#c55',range:60},
+  xlr8:      {hp:90, speed:6,atk:12,color:'#0cf',range:90},
+  cannonbolt:{hp:160,speed:5,atk:20,color:'#fb0',range:70}
+};
+
+/* ---------- ENEMIES ---------- */
+let enemies = [];
+let wave = 1, waveSize = 5;
+
+/* ---------- PROJECTILES ---------- */
+let projectiles = [];
+
+/* ---------- OMNI-WHEEL ---------- */
+let omniOpen = false;
+function drawWheel() {
+  const cx = player.x, cy = player.y-100, radius=60;
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(cx,cy,radius,0,Math.PI*2); ctx.fill();
+  const list = Object.keys(aliens);
+  const slice = Math.PI*2 / list.length;
+  list.forEach((name,i)=>{
+    const angle = slice*i - Math.PI/2;
+    const x = cx + Math.cos(angle)*radius*0.7;
+    const y = cy + Math.sin(angle)*radius*0.7;
+    ctx.fillStyle = aliens[name].color;
+    ctx.beginPath(); ctx.arc(x,y,15,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='12px Arial';
+    ctx.textAlign='center'; ctx.fillText(name,x,y+4);
+  });
+  ctx.restore();
+}
+
+/* ---------- GAME LOOP ---------- */
+let last=0;
+function gameLoop(ts){
+  const dt = ts-last; last=ts;
+  update(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
+function update(dt){
+  /* input */
+  if(keys['Space']){ omniOpen=true; } else { omniOpen=false; }
+
+  /* movement */
+  let dx=0, dy=0;
+  if(keys['KeyW']||keys['ArrowUp'])    dy--;
+  if(keys['KeyS']||keys['ArrowDown'])  dy++;
+  if(keys['KeyA']||keys['ArrowLeft'])  dx--;
+  if(keys['KeyD']||keys['ArrowRight']) dx++;
+  const len = Math.hypot(dx,dy);
+  if(len){ dx/=len; dy/=len; }
+  const spd = aliens[player.form].speed;
+  player.x = Math.max(0,Math.min(cvs.width-32, player.x+dx*spd));
+  player.y = Math.max(0,Math.min(cvs.height-48, player.y+dy*spd));
+
+  /* pets follow */
+  player.pets.forEach((p,i)=>{
+    const angle = Date.now()/500 + i*Math.PI*2/3;
+    p.x = player.x + Math.cos(angle)*40;
+    p.y = player.y + Math.sin(angle)*40;
+  });
+
+  /* attack */
+  if(player.cooldown>0) player.cooldown-=dt;
+  if((keys['Mouse0']||keys['Space']) && !omniOpen && player.cooldown<=0){
+    const a = Math.atan2(mouse.y-player.y, mouse.x-player.x);
+    const range = aliens[player.form].range || 100;
+    projectiles.push({
+      x:player.x, y:player.y,
+      vx:Math.cos(a)*8, vy:Math.sin(a)*8,
+      life:range/8,
+      dmg: aliens[player.form].atk,
+      color: aliens[player.form].color
+    });
+    player.cooldown = 300;
+  }
+
+  /* projectiles */
+  projectiles = projectiles.filter(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.life--;
+    return p.life>0;
+  });
+
+  /* spawn enemies */
+  if(enemies.length===0){
+    wave++;
+    for(let i=0;i<wave*2+3;i++){
+      enemies.push({
+        x:Math.random()*cvs.width,
+        y:Math.random()*cvs.height,
+        hp:30+wave*5,
+        speed:1+wave*0.2
+      });
+    }
+  }
+
+  /* enemies move & attack */
+  enemies.forEach(e=>{
+    const a = Math.atan2(player.y-e.y,player.x-e.x);
+    e.x += Math.cos(a)*e.speed;
+    e.y += Math.sin(a)*e.speed;
+    if(Math.hypot(player.x-e.x,player.y-e.y)<20){
+      player.hp-=1;
+    }
+  });
+
+  /* projectile vs enemy */
+  projectiles.forEach(p=>{
+    enemies.forEach(e=>{
+      if(Math.hypot(p.x-e.x,p.y-e.y)<20){
+        e.hp-=p.dmg;
+        p.life=0;
+      }
+    });
+  });
+  enemies = enemies.filter(e=>e.hp>0);
+
+enemies.forEach(e => {
+    const a = Math.atan2(player.y - e.y, player.x - e.x);
+    e.x += Math.cos(a) * e.speed;
+    e.y += Math.sin(a) * e.speed;
+
+    // damage only once per contact
+    if (Math.hypot(player.x - e.x, player.y - e.y) < 25 && !e.hitPlayer) {
+        player.hp = Math.max(0, player.hp - 10);
+        e.hitPlayer = true;               // prevents rapid hits
+    }
+    if (Math.hypot(player.x - e.x, player.y - e.y) >= 25) {
+        e.hitPlayer = false;              // reset when apart
+    }
+});
+
+  /* omni-wheel choose */
+  if (omniOpen && keys['Mouse0']) {
+    const cx = player.x, cy = player.y - 100, radius = 60;
+    const dx = mouse.x - cx, dy = mouse.y - cy;
+    if (Math.hypot(dx, dy) < radius) {
+        // which slice?
+        const list = Object.keys(aliens);
+        const slice = Math.PI * 2 / list.length;
+        let angle = Math.atan2(dy, dx) + Math.PI / 2;
+        if (angle < 0) angle += Math.PI * 2;
+        const idx = Math.floor(angle / slice) % list.length;
+        player.form = list[idx];
+    }
+}
+  if(keys['Key1']) player.form='heatblast';
+  if(keys['Key2']) player.form='fourarms';
+  if(keys['Key3']) player.form='xlr8';
+  if(keys['Key4']) player.form='cannonbolt';
+  if(keys['Key0']) player.form='ben';
+
+  if (player.hp <= 0) {
+    alert("Game Over – Ben and the pets need a break!");
+    location.reload();   // quick restart
+  }
+
+  /* hud */
+  document.getElementById('hp').textContent   = player.hp;
+  document.getElementById('wave').textContent = wave;
+}
+
+function render(){
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+
+  /* draw pets */
+  player.pets.forEach(p=>{
+    ctx.fillStyle=sprites.pet.color;
+    ctx.fillRect(p.x-sprites.pet.w/2,p.y-sprites.pet.h/2,sprites.pet.w,sprites.pet.h);
+  });
+
+  /* draw player */
+  const s = aliens[player.form];
+  ctx.fillStyle=s.color;
+  ctx.fillRect(player.x-sprites.ben.w/2,player.y-sprites.ben.h/2,sprites.ben.w,sprites.ben.h);
+
+  /* draw enemies */
+  ctx.fillStyle=sprites.bot.color;
+  enemies.forEach(e=>{
+    ctx.fillRect(e.x-sprites.bot.w/2,e.y-sprites.bot.h/2,sprites.bot.w,sprites.bot.h);
+  });
+
+  /* draw projectiles */
+  projectiles.forEach(p=>{
+    ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill();
+  });
+
+  /* draw wheel */
+  if(omniOpen) drawWheel();
+}
+</script>
+</body>
+</html>
