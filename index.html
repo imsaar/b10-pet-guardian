@@ -21,11 +21,14 @@ window.onkeydown = e => keys[e.code] = true;
 window.onkeyup   = e => keys[e.code] = false;
 let mouse = {x:0,y:0};
 cvs.onmousemove = e => { const r=cvs.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top; };
+cvs.onmousedown = e => keys['Mouse0'] = true;
+cvs.onmouseup   = e => keys['Mouse0'] = false;
 cvs.oncontextmenu = e => e.preventDefault();
 
-/* ---------- ASSETS (tiny inline sprites) ---------- */
+/* ---------- ASSETS ---------- */
+const benImg = new Image();
+benImg.src = 'ben10.gif';   // <-- your uploaded sprite
 const sprites = {
-  ben:  {w:32,h:48,color:'#2a5'},
   heatblast: {w:40,h:50,color:'#f50'},
   fourarms:  {w:50,h:60,color:'#c55'},
   xlr8:      {w:36,h:46,color:'#0cf'},
@@ -56,7 +59,7 @@ const aliens = {
 
 /* ---------- ENEMIES ---------- */
 let enemies = [];
-let wave = 1, waveSize = 5;
+let wave = 1;
 
 /* ---------- PROJECTILES ---------- */
 let projectiles = [];
@@ -117,7 +120,7 @@ function update(dt){
 
   /* attack */
   if(player.cooldown>0) player.cooldown-=dt;
-  if((keys['Mouse0']||keys['Space']) && !omniOpen && player.cooldown<=0){
+  if(keys['Mouse0'] && !omniOpen && player.cooldown<=0){
     const a = Math.atan2(mouse.y-player.y, mouse.x-player.x);
     const range = aliens[player.form].range || 100;
     projectiles.push({
@@ -128,6 +131,20 @@ function update(dt){
       color: aliens[player.form].color
     });
     player.cooldown = 300;
+  }
+
+  /* wheel choice */
+  if (omniOpen && keys['Mouse0']) {
+      const cx = player.x, cy = player.y - 100, radius = 60;
+      const dx = mouse.x - cx, dy = mouse.y - cy;
+      if (Math.hypot(dx, dy) < radius) {
+          const list = Object.keys(aliens);
+          const slice = Math.PI * 2 / list.length;
+          let angle = Math.atan2(dy, dx) + Math.PI / 2;
+          if (angle < 0) angle += Math.PI * 2;
+          const idx = Math.floor(angle / slice) % list.length;
+          player.form = list[idx];
+      }
   }
 
   /* projectiles */
@@ -144,20 +161,26 @@ function update(dt){
         x:Math.random()*cvs.width,
         y:Math.random()*cvs.height,
         hp:30+wave*5,
-        speed:1+wave*0.2
+        speed:1+wave*0.2,
+        hitPlayer:false
       });
     }
   }
 
-  /* enemies move & attack */
+  /* enemies */
   enemies.forEach(e=>{
     const a = Math.atan2(player.y-e.y,player.x-e.x);
     e.x += Math.cos(a)*e.speed;
     e.y += Math.sin(a)*e.speed;
-    if(Math.hypot(player.x-e.x,player.y-e.y)<20){
-      player.hp-=1;
+    if(Math.hypot(player.x-e.x,player.y-e.y)<25 && !e.hitPlayer){
+      player.hp = Math.max(0, player.hp-10);
+      e.hitPlayer=true;
+    }
+    if(Math.hypot(player.x-e.x,player.y-e.y)>=25){
+      e.hitPlayer=false;
     }
   });
+  enemies = enemies.filter(e=>e.hp>0);
 
   /* projectile vs enemy */
   projectiles.forEach(p=>{
@@ -168,46 +191,11 @@ function update(dt){
       }
     });
   });
-  enemies = enemies.filter(e=>e.hp>0);
 
-enemies.forEach(e => {
-    const a = Math.atan2(player.y - e.y, player.x - e.x);
-    e.x += Math.cos(a) * e.speed;
-    e.y += Math.sin(a) * e.speed;
-
-    // damage only once per contact
-    if (Math.hypot(player.x - e.x, player.y - e.y) < 25 && !e.hitPlayer) {
-        player.hp = Math.max(0, player.hp - 10);
-        e.hitPlayer = true;               // prevents rapid hits
-    }
-    if (Math.hypot(player.x - e.x, player.y - e.y) >= 25) {
-        e.hitPlayer = false;              // reset when apart
-    }
-});
-
-  /* omni-wheel choose */
-  if (omniOpen && keys['Mouse0']) {
-    const cx = player.x, cy = player.y - 100, radius = 60;
-    const dx = mouse.x - cx, dy = mouse.y - cy;
-    if (Math.hypot(dx, dy) < radius) {
-        // which slice?
-        const list = Object.keys(aliens);
-        const slice = Math.PI * 2 / list.length;
-        let angle = Math.atan2(dy, dx) + Math.PI / 2;
-        if (angle < 0) angle += Math.PI * 2;
-        const idx = Math.floor(angle / slice) % list.length;
-        player.form = list[idx];
-    }
-}
-  if(keys['Key1']) player.form='heatblast';
-  if(keys['Key2']) player.form='fourarms';
-  if(keys['Key3']) player.form='xlr8';
-  if(keys['Key4']) player.form='cannonbolt';
-  if(keys['Key0']) player.form='ben';
-
-  if (player.hp <= 0) {
+  /* lose */
+  if(player.hp<=0){
     alert("Game Over – Ben and the pets need a break!");
-    location.reload();   // quick restart
+    location.reload();
   }
 
   /* hud */
@@ -224,10 +212,13 @@ function render(){
     ctx.fillRect(p.x-sprites.pet.w/2,p.y-sprites.pet.h/2,sprites.pet.w,sprites.pet.h);
   });
 
-  /* draw player */
-  const s = aliens[player.form];
-  ctx.fillStyle=s.color;
-  ctx.fillRect(player.x-sprites.ben.w/2,player.y-sprites.ben.h/2,sprites.ben.w,sprites.ben.h);
+  /* draw player sprite */
+  const scale = 0.7; // tweak if too big
+  ctx.drawImage(benImg,
+                player.x - benImg.width*scale/2,
+                player.y - benImg.height*scale/2,
+                benImg.width*scale,
+                benImg.height*scale);
 
   /* draw enemies */
   ctx.fillStyle=sprites.bot.color;
