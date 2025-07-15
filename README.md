@@ -60,15 +60,15 @@ The game automatically detects mobile devices and provides:
 ├── index.html      # Main HTML structure
 ├── styles.css      # All game styling
 ├── game.js         # Complete game logic
-├── ben10.gif       # Ben sprite
-├── ben10_sprite.png # Sprite sheet (unused)
-└── README.md       # This file
+├── README.md       # This file
+└── CLAUDE.md       # Development guide for Claude Code
 ```
 
 ## 🔧 Technical Details
 
 - Built with vanilla JavaScript and HTML5 Canvas
 - No frameworks or libraries required
+- No external image dependencies - all sprites generated programmatically
 - Modular code structure with separate files for HTML, CSS, and JS
 - Frame-independent physics using delta time
 

@@ -58,6 +58,13 @@ if (isMobile) {
   document.getElementById('controls').style.display = 'block';
 }
 
+// Mute button functionality
+const muteBtn = document.getElementById('muteBtn');
+muteBtn.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  muteBtn.textContent = soundEnabled ? '🔊' : '🔇';
+});
+
 /* ---------- INPUT SYSTEM ---------- */
 const keys = {};
 let mouse = {x:0,y:0};
@@ -299,6 +306,67 @@ benImg.onload = function() {
   console.log('Ben sprite loaded');
 };
 
+/* ---------- SOUND SYSTEM ---------- */
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let soundEnabled = true;
+
+// Sound effect functions
+function playSound(type, frequency = 440, duration = 0.1, volume = 0.3) {
+  if (!soundEnabled) return;
+  
+  try {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+    
+    switch(type) {
+      case 'shoot':
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.5, audioContext.currentTime + duration);
+        break;
+        
+      case 'hit':
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.25, audioContext.currentTime + duration);
+        break;
+        
+      case 'pickup':
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 2, audioContext.currentTime + duration * 0.5);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.5, audioContext.currentTime + duration);
+        break;
+        
+      case 'transform':
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(frequency * 0.5, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 2, audioContext.currentTime + duration * 0.5);
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime + duration * 0.5);
+        break;
+    }
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch(e) {
+    console.warn('Audio error:', e);
+  }
+}
+
+// Specific sound effects
+const sounds = {
+  shoot: () => playSound('shoot', 300, 0.1, 0.2),
+  enemyHit: () => playSound('hit', 150, 0.2, 0.3),
+  pickup: () => playSound('pickup', 800, 0.3, 0.2),
+  transform: () => playSound('transform', 400, 0.5, 0.3),
+  playerHurt: () => playSound('hit', 100, 0.3, 0.4)
+};
 
 /* ---------- GAME STATE ---------- */
 const player = {
@@ -679,6 +747,11 @@ function drawWheel() {
     ctx.font='bold 12px Arial';
     ctx.textAlign='center';
     ctx.fillText(name.toUpperCase(),x,y+4);
+    
+    // Number shortcut
+    ctx.fillStyle='#0f0';
+    ctx.font='bold 16px Arial';
+    ctx.fillText((i+1).toString(), x, y-30);
   });
   
   // Center
@@ -819,6 +892,7 @@ function update(dt){
           size: 8
         });
       }
+      sounds.shoot();
     } else if(player.form === 'cannonbolt') {
       // Big projectile
       projectiles.push({
@@ -829,6 +903,7 @@ function update(dt){
         color: aliens[player.form].color,
         size: 15
       });
+      sounds.shoot();
     } else {
       // Normal projectile
       projectiles.push({
@@ -839,6 +914,7 @@ function update(dt){
         color: aliens[player.form].color,
         size: 6
       });
+      sounds.shoot();
     }
     player.cooldown = player.form === 'xlr8' ? 150 : 300;
   }
@@ -861,6 +937,7 @@ function update(dt){
         player.hp = Math.min(player.hp, aliens[newForm].hp);
         player.maxHp = aliens[newForm].hp;
         createParticles(player.x, player.y, aliens[newForm].color, 20);
+        sounds.transform();
         
         // Close Omnitrix after selection
         omniOpen = false;
@@ -906,6 +983,7 @@ function update(dt){
       if(p.type === 'health') {
         player.hp = Math.min(player.maxHp, player.hp + p.value);
         createParticles(p.x, p.y, '#0f0', 15);
+        sounds.pickup();
       }
       return false;
     }
@@ -996,6 +1074,7 @@ function update(dt){
           e.hp -= p.dmg;
           p.life = 0;
           createParticles(e.x, e.y, et.color, 5);
+          sounds.enemyHit();
           
           if(e.hp <= 0) {
             const points = et.score * wave;
@@ -1025,6 +1104,7 @@ function update(dt){
         player.invulnerable = 1000;
         p.life = 0;
         createParticles(player.x, player.y, '#f00', 10);
+        sounds.playerHurt();
       }
     }
   });
