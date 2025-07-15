@@ -6,8 +6,8 @@ A browser-based action game where you play as Ben 10, using the Omnitrix to tran
 
 ### Desktop Controls
 - **Movement**: Arrow keys or WASD
-- **Attack**: Mouse click
-- **Omnitrix**: Space bar
+- **Attack**: Mouse click or Space bar
+- **Omnitrix**: Q key
 - **Select Alien**: Click on alien in wheel or press 1-5 keys
 
 ### Mobile Controls
