@@ -218,35 +218,87 @@ if (isMobile) {
 }
 
 /* ---------- ASSETS ---------- */
+// Create Ben sprite programmatically
+const benCanvas = document.createElement('canvas');
+benCanvas.width = 64;
+benCanvas.height = 64;
+const benCtx = benCanvas.getContext('2d');
+
+// Draw Ben 10 sprite
+benCtx.save();
+benCtx.translate(32, 32);
+
+// Hair
+benCtx.fillStyle = '#3d2314';
+benCtx.fillRect(-12, -28, 24, 12);
+benCtx.fillRect(-10, -30, 20, 4);
+
+// Head
+benCtx.fillStyle = '#fdbcb4';
+benCtx.fillRect(-10, -20, 20, 20);
+benCtx.fillRect(-12, -18, 24, 16);
+
+// Eyes
+benCtx.fillStyle = '#000';
+benCtx.fillRect(-7, -15, 4, 4);
+benCtx.fillRect(3, -15, 4, 4);
+benCtx.fillStyle = '#fff';
+benCtx.fillRect(-6, -14, 1, 1);
+benCtx.fillRect(4, -14, 1, 1);
+
+// Mouth
+benCtx.fillStyle = '#000';
+benCtx.fillRect(-2, -7, 4, 1);
+
+// Body - green shirt
+benCtx.fillStyle = '#228b22';
+benCtx.fillRect(-12, 0, 24, 20);
+benCtx.fillRect(-14, 2, 28, 16);
+
+// White stripe and 10
+benCtx.fillStyle = '#fff';
+benCtx.fillRect(-2, 2, 4, 16);
+benCtx.fillStyle = '#000';
+benCtx.font = 'bold 8px Arial';
+benCtx.fillText('10', -5, 12);
+
+// Arms
+benCtx.fillStyle = '#fdbcb4';
+benCtx.fillRect(-16, 4, 4, 12);
+benCtx.fillRect(12, 4, 4, 12);
+benCtx.fillRect(-17, 16, 6, 4);
+benCtx.fillRect(11, 16, 6, 4);
+
+// Omnitrix
+benCtx.fillStyle = '#000';
+benCtx.fillRect(-16, 14, 4, 3);
+benCtx.fillStyle = '#0f0';
+benCtx.fillRect(-15, 15, 2, 1);
+
+// Legs
+benCtx.fillStyle = '#4a5d23';
+benCtx.fillRect(-8, 20, 6, 8);
+benCtx.fillRect(2, 20, 6, 8);
+
+// Shoes
+benCtx.fillStyle = '#000';
+benCtx.fillRect(-9, 28, 8, 4);
+benCtx.fillRect(1, 28, 8, 4);
+benCtx.fillStyle = '#fff';
+benCtx.fillRect(-8, 29, 6, 1);
+benCtx.fillRect(2, 29, 6, 1);
+
+benCtx.restore();
+
+// Convert to image
 const benImg = new Image();
-benImg.src = 'ben10.gif';
+benImg.src = benCanvas.toDataURL();
 
-const benSpriteSheet = new Image();
-benSpriteSheet.src = 'ben10_sprite.png';
-benSpriteSheet.onload = function() {
-  console.log('Sprite sheet loaded:', benSpriteSheet.width, 'x', benSpriteSheet.height);
+// Mark as complete since it's a data URL
+benImg.onload = function() {
+  console.log('Ben sprite loaded');
 };
 
-// Sprite animation data
-// The sprite sheet appears to be 194x163 with 6 columns
-const benAnimations = {
-  idle: {
-    row: 3, // Bottom row (0-indexed)
-    frames: 1,
-    startFrame: 0,
-    frameWidth: 194/6, // ~32.33 pixels
-    frameHeight: 163/4, // ~40.75 pixels
-    frameTime: 1000
-  },
-  walk: {
-    row: 3, // Bottom row
-    frames: 6,
-    startFrame: 0,
-    frameWidth: 194/6,
-    frameHeight: 163/4,
-    frameTime: 150 // Slightly slower for better visibility
-  }
-};
 
 /* ---------- GAME STATE ---------- */
 const player = {
@@ -416,29 +468,17 @@ function drawAlienSprite(x, y, form, scale = 1) {
   
   switch(form) {
     case 'ben':
-      // Use static GIF for now - it works well
+      // Use our custom sprite
       if(benImg.complete) {
-        const imgScale = 0.63; // Reduced by 10% from 0.7
+        const imgScale = 1.0; // Full size for pixel art sprite
         ctx.scale(player.facing, 1);
         ctx.drawImage(benImg,
           -benImg.width*imgScale/2,
           -benImg.height*imgScale/2,
           benImg.width*imgScale,
           benImg.height*imgScale);
-      } else if(benSpriteSheet.complete && false) { // Disabled for now
-        // Sprite sheet code - needs more work
-        const anim = player.moving ? benAnimations.walk : benAnimations.idle;
-        const actualFrame = player.moving ? player.animFrame : 0;
-        const frameX = Math.floor(actualFrame * 32);
-        const frameY = Math.floor(3 * 40); // Bottom row
-        
-        // Draw Ben at consistent size with other characters
-        ctx.scale(player.facing, 1);
-        ctx.drawImage(benSpriteSheet,
-          frameX, frameY, 32, 40,
-          -20, -25, 40, 50);
       } else {
-        // Fallback Ben sprite
+        // Fallback Ben sprite while loading
         ctx.fillStyle = '#2a5';
         ctx.fillRect(-20, -25, 40, 50);
         ctx.fillStyle = '#fff';
@@ -704,22 +744,7 @@ function update(dt){
     player.facing = dx > 0 ? 1 : -1;
   }
   
-  // Update animation frame
-  if(player.form === 'ben' && benSpriteSheet.complete) {
-    const anim = player.moving ? benAnimations.walk : benAnimations.idle;
-    
-    if(player.moving) {
-      player.animTime += dt;
-      if(player.animTime >= anim.frameTime) {
-        player.animTime = 0;
-        player.animFrame = (player.animFrame + 1) % anim.frames;
-      }
-    } else {
-      // Reset to idle frame when not moving
-      player.animFrame = 0;
-      player.animTime = 0;
-    }
-  }
+  // Animation frame handling removed - using static sprite
   
   // Pets follow and attack
   player.pets.forEach((p,i)=>{
