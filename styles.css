@@ -1,0 +1,127 @@
+/* Ben 10: Pet Guardians - Styles */
+
+body {
+  margin: 0;
+  background: #111;
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#gameContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  background: #222;
+  display: block;
+  border: 2px solid #0ff;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+}
+
+#hud {
+  position: fixed;
+  top: env(safe-area-inset-top, 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 5px 15px;
+  border-radius: 20px;
+  z-index: 10;
+}
+
+#controls {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 20px);
+  width: 100%;
+  display: none;
+  touch-action: none;
+  z-index: 10;
+}
+
+#joystick {
+  position: absolute;
+  left: 15px;
+  bottom: 15px;
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+#joystickKnob {
+  position: absolute;
+  width: 35px;
+  height: 35px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  left: 32.5px;
+  top: 32.5px;
+}
+
+#attackBtn {
+  position: absolute;
+  right: 15px;
+  bottom: 15px;
+  width: 70px;
+  height: 70px;
+  background: rgba(255, 0, 0, 0.4);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+#omniBtn {
+  position: absolute;
+  right: 95px;
+  bottom: 25px;
+  width: 55px;
+  height: 55px;
+  background: rgba(0, 255, 0, 0.4);
+  border-radius: 50%;
+  border: 2px solid rgba(0, 255, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+#omniBtn.active {
+  background: rgba(0, 255, 0, 0.8);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+}
+
+#omniHelp {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 100px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #0f0;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  display: none;
+  z-index: 20;
+}
+
+@media (max-width: 768px) {
+  #hud {
+    font-size: 14px;
+    top: max(env(safe-area-inset-top, 10px), 10px);
+  }
+}
