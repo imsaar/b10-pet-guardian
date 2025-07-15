@@ -7,7 +7,7 @@
   <style>
      body{margin:0;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden;touch-action:none}
      #gameContainer{position:fixed;top:0;left:0;width:100vw;height:100vh}
-     canvas{background:#222;display:block;border:2px solid #0ff;position:absolute;top:0;left:0;width:100%;height:100%}
+     canvas{background:#222;display:block;border:2px solid #0ff;position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box}
      #hud{position:fixed;top:env(safe-area-inset-top, 10px);left:50%;transform:translateX(-50%);font-size:16px;background:rgba(0,0,0,0.7);padding:5px 15px;border-radius:20px;z-index:10}
      #score{position:fixed;top:env(safe-area-inset-top, 10px);right:10px;font-size:14px;background:rgba(0,0,0,0.7);padding:5px 10px;border-radius:15px;z-index:10}
      #controls{position:fixed;bottom:env(safe-area-inset-bottom, 20px);width:100%;display:none;touch-action:none;z-index:10}
@@ -15,6 +15,8 @@
      #joystickKnob{position:absolute;width:35px;height:35px;background:rgba(255,255,255,0.6);border-radius:50%;left:32.5px;top:32.5px}
      #attackBtn{position:absolute;right:15px;bottom:15px;width:70px;height:70px;background:rgba(255,0,0,0.4);border-radius:50%;border:2px solid rgba(255,0,0,0.6);display:flex;align-items:center;justify-content:center;font-size:22px}
      #omniBtn{position:absolute;right:95px;bottom:25px;width:55px;height:55px;background:rgba(0,255,0,0.4);border-radius:50%;border:2px solid rgba(0,255,0,0.6);display:flex;align-items:center;justify-content:center;font-size:14px}
+     #omniBtn.active{background:rgba(0,255,0,0.8);box-shadow:0 0 20px rgba(0,255,0,0.8)}
+     #omniHelp{position:fixed;bottom:env(safe-area-inset-bottom, 100px);left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#0f0;padding:10px 20px;border-radius:20px;font-size:14px;display:none;z-index:20}
      @media (max-width:768px){#hud{font-size:14px;top:max(env(safe-area-inset-top, 10px), 10px)}#score{font-size:12px}}
   </style>
 </head>
@@ -28,6 +30,7 @@
       <button id="attackBtn">⚡</button>
       <button id="omniBtn">⌚</button>
     </div>
+    <div id="omniHelp">Hold ⌚ then tap alien on wheel</div>
   </div>
 
 <script>
@@ -47,9 +50,9 @@ function resizeCanvas() {
   const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sab') || '0');
   
   if (isMobile) {
-    // Mobile: use full width, adjust height for controls
-    cvs.width = container.clientWidth;
-    cvs.height = container.clientHeight - controlsHeight - safeAreaTop - safeAreaBottom;
+    // Mobile: use full width minus borders, adjust height for controls
+    cvs.width = container.clientWidth - 4; // Account for 2px borders
+    cvs.height = container.clientHeight - controlsHeight - safeAreaTop - safeAreaBottom - 4;
   } else {
     // Desktop: maintain aspect ratio
     const maxWidth = container.clientWidth;
@@ -141,11 +144,35 @@ if (isMobile) {
   attackBtn.addEventListener('touchstart', e => { e.preventDefault(); keys['Attack'] = true; });
   attackBtn.addEventListener('touchend', e => { e.preventDefault(); keys['Attack'] = false; });
   
-  // Omnitrix button
-  omniBtn.addEventListener('touchstart', e => { e.preventDefault(); keys['Space'] = true; });
-  omniBtn.addEventListener('touchend', e => { e.preventDefault(); keys['Space'] = false; });
+  // Omnitrix button with visual feedback
+  omniBtn.addEventListener('touchstart', e => { 
+    e.preventDefault(); 
+    keys['Space'] = true; 
+    omniBtn.classList.add('active');
+    document.getElementById('omniHelp').style.display = 'block';
+  });
+  omniBtn.addEventListener('touchend', e => { 
+    e.preventDefault(); 
+    keys['Space'] = false; 
+    omniBtn.classList.remove('active');
+    document.getElementById('omniHelp').style.display = 'none';
+  });
   
-  // Touch for aiming
+  // Touch for aiming and Omnitrix selection
+  cvs.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const r = cvs.getBoundingClientRect();
+    mouse.x = (touch.clientX-r.left)*(cvs.width/r.width);
+    mouse.y = (touch.clientY-r.top)*(cvs.height/r.height);
+    
+    // Check if Omnitrix is open and tap is on wheel
+    if(omniOpen) {
+      keys['Mouse0'] = true;
+      setTimeout(() => keys['Mouse0'] = false, 100);
+    }
+  });
+  
   cvs.addEventListener('touchmove', e => {
     e.preventDefault();
     const touch = e.touches[0];
@@ -220,7 +247,11 @@ function spawnPickup(x,y) {
 
 /* ---------- OMNITRIX WHEEL ---------- */
 function drawWheel() {
-  const cx = player.x, cy = player.y-100, radius=80;
+  // Position wheel in center of screen on mobile for easier access
+  const cx = isMobile ? cvs.width/2 : player.x;
+  const cy = isMobile ? cvs.height/2 : player.y-100;
+  const radius = isMobile ? 100 : 80;
+  
   ctx.save();
   ctx.globalAlpha = 0.95;
   
@@ -320,8 +351,9 @@ function update(dt){
   }
   
   const spd = aliens[player.form].speed;
-  player.x = Math.max(20,Math.min(cvs.width-20, player.x+dx*spd));
-  player.y = Math.max(20,Math.min(cvs.height-20, player.y+dy*spd));
+  const margin = 25; // Increased margin for mobile
+  player.x = Math.max(margin,Math.min(cvs.width-margin, player.x+dx*spd));
+  player.y = Math.max(margin,Math.min(cvs.height-margin, player.y+dy*spd));
   
   // Pets follow and attack
   player.pets.forEach((p,i)=>{
@@ -422,7 +454,9 @@ function update(dt){
   
   // Omnitrix selection
   if (omniOpen && (keys['Mouse0'] || keys['Attack'])) {
-    const cx = player.x, cy = player.y - 100, radius = 80;
+    const cx = isMobile ? cvs.width/2 : player.x;
+    const cy = isMobile ? cvs.height/2 : player.y - 100;
+    const radius = isMobile ? 100 : 80;
     const dx = mouse.x - cx, dy = mouse.y - cy;
     if (Math.hypot(dx, dy) < radius && Math.hypot(dx, dy) > 20) {
       const list = Object.keys(aliens);
