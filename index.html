@@ -289,6 +289,263 @@ let wave = 1;
 let omniOpen = false;
 let omniTimer = 0;
 
+/* ---------- ENEMY SPRITES ---------- */
+function drawEnemySprite(x, y, type) {
+  ctx.save();
+  ctx.translate(x, y);
+  const et = enemyTypes[type];
+  
+  switch(type) {
+    case 'basic':
+      // Robot body
+      ctx.fillStyle = '#808';
+      ctx.fillRect(-15, -15, 30, 30);
+      
+      // Purple accents
+      ctx.fillStyle = '#a0a';
+      ctx.fillRect(-12, -12, 24, 8);
+      ctx.fillRect(-5, 5, 10, 10);
+      
+      // Eyes
+      ctx.fillStyle = '#f00';
+      ctx.fillRect(-8, -8, 4, 4);
+      ctx.fillRect(4, -8, 4, 4);
+      
+      // Antenna
+      ctx.strokeStyle = '#a0a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -15);
+      ctx.lineTo(0, -20);
+      ctx.stroke();
+      ctx.fillStyle = '#f0f';
+      ctx.beginPath();
+      ctx.arc(0, -20, 3, 0, Math.PI*2);
+      ctx.fill();
+      break;
+      
+    case 'fast':
+      // Sleek triangular body
+      ctx.fillStyle = '#d0d';
+      ctx.beginPath();
+      ctx.moveTo(0, -15);
+      ctx.lineTo(-12, 10);
+      ctx.lineTo(12, 10);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Speed stripes
+      ctx.fillStyle = '#f0f';
+      ctx.fillRect(-8, -5, 16, 2);
+      ctx.fillRect(-6, 0, 12, 2);
+      
+      // Eye visor
+      ctx.fillStyle = '#ff0';
+      ctx.fillRect(-8, -10, 16, 4);
+      break;
+      
+    case 'tank':
+      // Heavy armor plating
+      ctx.fillStyle = '#555';
+      ctx.fillRect(-20, -20, 40, 40);
+      
+      // Dark details
+      ctx.fillStyle = '#333';
+      ctx.fillRect(-20, -20, 40, 8);
+      ctx.fillRect(-20, 12, 40, 8);
+      
+      // Purple core
+      ctx.fillStyle = '#808';
+      ctx.fillRect(-10, -10, 20, 20);
+      
+      // Glowing eyes
+      ctx.fillStyle = '#f00';
+      ctx.fillRect(-12, -5, 6, 6);
+      ctx.fillRect(6, -5, 6, 6);
+      
+      // Armor studs
+      ctx.fillStyle = '#999';
+      for(let i = -15; i <= 15; i += 10) {
+        ctx.beginPath();
+        ctx.arc(i, 0, 3, 0, Math.PI*2);
+        ctx.fill();
+      }
+      break;
+      
+    case 'ranged':
+      // Body with cannon
+      ctx.fillStyle = '#a66';
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Cannon barrel
+      ctx.fillStyle = '#644';
+      ctx.fillRect(10, -4, 15, 8);
+      
+      // Energy core
+      ctx.fillStyle = '#f8a';
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Targeting eye
+      ctx.fillStyle = '#ff0';
+      ctx.beginPath();
+      ctx.arc(0, -3, 4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#f00';
+      ctx.beginPath();
+      ctx.arc(0, -3, 2, 0, Math.PI*2);
+      ctx.fill();
+      break;
+      
+    default:
+      // Fallback enemy
+      ctx.fillStyle = et.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, et.size/2, 0, Math.PI*2);
+      ctx.fill();
+  }
+  
+  ctx.restore();
+}
+
+/* ---------- ALIEN SPRITES ---------- */
+function drawAlienSprite(x, y, form, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  
+  switch(form) {
+    case 'ben':
+      if(benImg.complete) {
+        const imgScale = 0.6;
+        ctx.drawImage(benImg,
+          -benImg.width*imgScale/2,
+          -benImg.height*imgScale/2,
+          benImg.width*imgScale,
+          benImg.height*imgScale);
+      } else {
+        // Fallback Ben sprite
+        ctx.fillStyle = '#2a5';
+        ctx.fillRect(-20, -25, 40, 50);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(-15, -20, 10, 10);
+        ctx.fillRect(5, -20, 10, 10);
+      }
+      break;
+      
+    case 'heatblast':
+      // Flame body
+      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 30);
+      gradient.addColorStop(0, '#ff0');
+      gradient.addColorStop(0.5, '#f50');
+      gradient.addColorStop(1, '#a00');
+      ctx.fillStyle = gradient;
+      
+      // Flame shape
+      ctx.beginPath();
+      ctx.moveTo(0, -30);
+      ctx.quadraticCurveTo(-20, -20, -15, 0);
+      ctx.quadraticCurveTo(-10, 20, 0, 25);
+      ctx.quadraticCurveTo(10, 20, 15, 0);
+      ctx.quadraticCurveTo(20, -20, 0, -30);
+      ctx.fill();
+      
+      // Eyes
+      ctx.fillStyle = '#ff0';
+      ctx.fillRect(-8, -15, 5, 8);
+      ctx.fillRect(3, -15, 5, 8);
+      break;
+      
+    case 'fourarms':
+      // Body
+      ctx.fillStyle = '#c55';
+      ctx.fillRect(-20, -20, 40, 40);
+      
+      // Four arms
+      ctx.fillRect(-35, -15, 15, 10);
+      ctx.fillRect(20, -15, 15, 10);
+      ctx.fillRect(-35, 5, 15, 10);
+      ctx.fillRect(20, 5, 15, 10);
+      
+      // Face
+      ctx.fillStyle = '#833';
+      ctx.fillRect(-15, -15, 30, 20);
+      
+      // Eyes
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(-10, -10, 6, 6);
+      ctx.fillRect(4, -10, 6, 6);
+      break;
+      
+    case 'xlr8':
+      // Sleek body
+      ctx.fillStyle = '#0cf';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 15, 25, 0, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Speed lines
+      ctx.strokeStyle = '#0cf';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.5;
+      for(let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-20 - i*5, -10 + i*5);
+        ctx.lineTo(-30 - i*5, -10 + i*5);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      
+      // Visor
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(-12, -10, 24, 8);
+      break;
+      
+    case 'cannonbolt':
+      // Armored ball
+      ctx.fillStyle = '#fb0';
+      ctx.beginPath();
+      ctx.arc(0, 0, 25, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Armor plates
+      ctx.strokeStyle = '#a80';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 25, 0, Math.PI*2);
+      ctx.stroke();
+      
+      // Segments
+      for(let a = 0; a < Math.PI*2; a += Math.PI/3) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a)*25, Math.sin(a)*25);
+        ctx.stroke();
+      }
+      
+      // Eyes
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-8, -5, 5, 5);
+      ctx.fillRect(3, -5, 5, 5);
+      break;
+      
+    default:
+      // Generic alien
+      ctx.fillStyle = aliens[form]?.color || '#888';
+      ctx.beginPath();
+      ctx.arc(0, 0, 25, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
 /* ---------- PARTICLES ---------- */
 function createParticles(x,y,color,count=10) {
   for(let i=0;i<count;i++) {
@@ -364,10 +621,7 @@ function drawWheel() {
     }
     
     // Alien icon
-    ctx.fillStyle = aliens[name].color;
-    ctx.beginPath();
-    ctx.arc(x,y,20,0,Math.PI*2);
-    ctx.fill();
+    drawAlienSprite(x, y, name, 0.8);
     
     // Name
     ctx.fillStyle='#fff';
@@ -435,8 +689,8 @@ function update(dt){
   // Pets follow and attack
   player.pets.forEach((p,i)=>{
     const angle = Date.now()/500 + i*Math.PI*2/3;
-    p.x = player.x + Math.cos(angle)*50;
-    p.y = player.y + Math.sin(angle)*50;
+    p.x = player.x + Math.cos(angle)*60;
+    p.y = player.y + Math.sin(angle)*60;
     
     // Pet attacks
     if(p.cooldown > 0) p.cooldown -= dt;
@@ -748,14 +1002,46 @@ function render(){
   });
   
   // Draw pets
-  player.pets.forEach(p=>{
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 12, 0, Math.PI*2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+  player.pets.forEach((p, i)=>{
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(0.5, 0.5);
+    
+    // Draw mini versions of aliens as pets
+    if(i === 0) { // Stinkfly
+      ctx.fillStyle = '#0f8';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI*2);
+      ctx.fill();
+      // Wings
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(-15, 0, 10, 20, -Math.PI/4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(15, 0, 10, 20, Math.PI/4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if(i === 1) { // Mini Heatblast
+      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 15);
+      gradient.addColorStop(0, '#ff0');
+      gradient.addColorStop(1, '#f50');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI*2);
+      ctx.fill();
+    } else { // Grey Matter
+      ctx.fillStyle = '#88f';
+      ctx.beginPath();
+      ctx.ellipse(0, -5, 12, 15, 0, 0, Math.PI*2);
+      ctx.fill();
+      // Big eyes
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-6, -5, 5, 6);
+      ctx.fillRect(1, -5, 5, 6);
+    }
+    
+    ctx.restore();
   });
   
   // Draw player
@@ -763,23 +1049,7 @@ function render(){
     ctx.globalAlpha = 0.5;
   }
   
-  if(benImg.complete && player.form === 'ben') {
-    const scale = 0.6;
-    ctx.drawImage(benImg,
-      player.x - benImg.width*scale/2,
-      player.y - benImg.height*scale/2,
-      benImg.width*scale,
-      benImg.height*scale);
-  } else {
-    // Draw alien form
-    ctx.fillStyle = aliens[player.form].color;
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, 25, 0, Math.PI*2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  }
+  drawAlienSprite(player.x, player.y, player.form, 1);
   ctx.globalAlpha = 1;
   
   // Health bar
@@ -793,17 +1063,9 @@ function render(){
   // Draw enemies
   enemies.forEach(e=>{
     const et = enemyTypes[e.type];
-    ctx.fillStyle = et.color;
     
-    if(e.type === 'tank') {
-      // Square for tanks
-      ctx.fillRect(e.x-et.size/2, e.y-et.size/2, et.size, et.size);
-    } else {
-      // Circle for others
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, et.size/2, 0, Math.PI*2);
-      ctx.fill();
-    }
+    // Draw enemy sprite
+    drawEnemySprite(e.x, e.y, e.type);
     
     // Enemy health bar
     if(e.hp < e.maxHp) {
