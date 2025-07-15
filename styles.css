@@ -40,7 +40,8 @@ canvas {
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 10px;
+  white-space: nowrap;
 }
 
 #muteBtn {
@@ -140,5 +141,15 @@ canvas {
   #hud {
     font-size: 14px;
     top: max(env(safe-area-inset-top, 10px), 10px);
+    padding: 8px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: center;
+    min-width: fit-content;
+  }
+  
+  #hud span {
+    display: inline-block;
+    min-width: fit-content;
   }
 }
