@@ -44,7 +44,7 @@ The codebase is organized into three main files:
 ## Key Implementation Details
 
 1. **Omnitrix Controls**:
-   - Desktop: Space to toggle, numbers 1-5 or click to select
+   - Desktop: Q key to toggle, numbers 1-5 or click to select
    - Mobile: Green button to toggle, tap alien to select
    - Auto-closes after 5 seconds with visual countdown
 

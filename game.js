@@ -75,14 +75,33 @@ let joystickVector = {x:0,y:0};
 if (!isMobile) {
   window.onkeydown = e => {
     keys[e.code] = true;
-    // Toggle Omnitrix with Space on desktop
-    if(e.code === 'Space') {
+    // Toggle Omnitrix with Q key on desktop
+    if(e.code === 'KeyQ') {
       e.preventDefault();
       omniOpen = !omniOpen;
       if(omniOpen) {
         omniTimer = 5000; // 5 seconds auto-close (validated range)
       } else {
         omniTimer = 0;
+      }
+    }
+    
+    // Number keys to select aliens when Omnitrix is open
+    if(omniOpen && e.code >= 'Digit1' && e.code <= 'Digit5') {
+      e.preventDefault();
+      const num = parseInt(e.code.replace('Digit', ''));
+      const alienList = Object.keys(aliens);
+      if(num <= alienList.length) {
+        const newForm = alienList[num - 1];
+        if(newForm !== player.form) {
+          player.form = newForm;
+          player.hp = Math.min(player.hp, aliens[newForm].hp);
+          player.maxHp = aliens[newForm].hp;
+          createParticles(player.x, player.y, aliens[newForm].color, 20);
+          sounds.transform();
+          omniOpen = false;
+          omniTimer = 0;
+        }
       }
     }
   };
@@ -856,7 +875,7 @@ function update(dt){
   
   // Player attack
   if(player.cooldown>0) player.cooldown-=dt;
-  if((keys['Mouse0'] || keys['Attack']) && !omniOpen && player.cooldown<=0){
+  if((keys['Mouse0'] || keys['Attack'] || keys['Space']) && !omniOpen && player.cooldown<=0){
     // Auto-aim for mobile
     let targetX = mouse.x;
     let targetY = mouse.y;
