@@ -6,16 +6,16 @@
   <title>Ben 10: Pet Guardians</title>
   <style>
      body{margin:0;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden;touch-action:none}
-     #gameContainer{position:relative;width:100vw;height:100vh;display:flex;justify-content:center;align-items:center}
-     canvas{background:#222;display:block;border:2px solid #0ff;max-width:100%;max-height:100%;object-fit:contain}
-     #hud{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:18px;background:rgba(0,0,0,0.5);padding:5px 15px;border-radius:20px}
-     #score{position:absolute;top:10px;right:10px;font-size:16px;background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:15px}
-     #controls{position:absolute;bottom:20px;width:100%;display:none;touch-action:none}
-     #joystick{position:absolute;left:20px;bottom:0;width:120px;height:120px;background:rgba(255,255,255,0.1);border-radius:50%;border:2px solid rgba(255,255,255,0.3)}
-     #joystickKnob{position:absolute;width:40px;height:40px;background:rgba(255,255,255,0.5);border-radius:50%;left:40px;top:40px}
-     #attackBtn{position:absolute;right:20px;bottom:0;width:80px;height:80px;background:rgba(255,0,0,0.3);border-radius:50%;border:2px solid rgba(255,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:24px}
-     #omniBtn{position:absolute;right:110px;bottom:10px;width:60px;height:60px;background:rgba(0,255,0,0.3);border-radius:50%;border:2px solid rgba(0,255,0,0.5);display:flex;align-items:center;justify-content:center;font-size:16px}
-     @media (max-width:768px){#hud{font-size:14px}#score{font-size:14px}}
+     #gameContainer{position:fixed;top:0;left:0;width:100vw;height:100vh}
+     canvas{background:#222;display:block;border:2px solid #0ff;position:absolute;top:0;left:0;width:100%;height:100%}
+     #hud{position:fixed;top:env(safe-area-inset-top, 10px);left:50%;transform:translateX(-50%);font-size:16px;background:rgba(0,0,0,0.7);padding:5px 15px;border-radius:20px;z-index:10}
+     #score{position:fixed;top:env(safe-area-inset-top, 10px);right:10px;font-size:14px;background:rgba(0,0,0,0.7);padding:5px 10px;border-radius:15px;z-index:10}
+     #controls{position:fixed;bottom:env(safe-area-inset-bottom, 20px);width:100%;display:none;touch-action:none;z-index:10}
+     #joystick{position:absolute;left:15px;bottom:15px;width:100px;height:100px;background:rgba(255,255,255,0.15);border-radius:50%;border:2px solid rgba(255,255,255,0.4)}
+     #joystickKnob{position:absolute;width:35px;height:35px;background:rgba(255,255,255,0.6);border-radius:50%;left:32.5px;top:32.5px}
+     #attackBtn{position:absolute;right:15px;bottom:15px;width:70px;height:70px;background:rgba(255,0,0,0.4);border-radius:50%;border:2px solid rgba(255,0,0,0.6);display:flex;align-items:center;justify-content:center;font-size:22px}
+     #omniBtn{position:absolute;right:95px;bottom:25px;width:55px;height:55px;background:rgba(0,255,0,0.4);border-radius:50%;border:2px solid rgba(0,255,0,0.6);display:flex;align-items:center;justify-content:center;font-size:14px}
+     @media (max-width:768px){#hud{font-size:14px;top:max(env(safe-area-inset-top, 10px), 10px)}#score{font-size:12px}}
   </style>
 </head>
 <body>
@@ -35,23 +35,38 @@
 const cvs = document.getElementById('game'), ctx = cvs.getContext('2d');
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+// Set CSS variables for safe areas
+document.documentElement.style.setProperty('--sat', getComputedStyle(document.documentElement).paddingTop);
+document.documentElement.style.setProperty('--sab', getComputedStyle(document.documentElement).paddingBottom);
+
 // Responsive canvas
 function resizeCanvas() {
   const container = document.getElementById('gameContainer');
-  const maxWidth = container.clientWidth - 20;
-  const maxHeight = container.clientHeight - 20;
-  const aspectRatio = 4/3;
+  const controlsHeight = isMobile ? 150 : 0; // Reserve space for controls
+  const safeAreaTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sat') || '0');
+  const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sab') || '0');
   
-  let width = maxWidth;
-  let height = width / aspectRatio;
-  
-  if (height > maxHeight) {
-    height = maxHeight;
-    width = height * aspectRatio;
+  if (isMobile) {
+    // Mobile: use full width, adjust height for controls
+    cvs.width = container.clientWidth;
+    cvs.height = container.clientHeight - controlsHeight - safeAreaTop - safeAreaBottom;
+  } else {
+    // Desktop: maintain aspect ratio
+    const maxWidth = container.clientWidth;
+    const maxHeight = container.clientHeight;
+    const aspectRatio = 4/3;
+    
+    let width = maxWidth;
+    let height = width / aspectRatio;
+    
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * aspectRatio;
+    }
+    
+    cvs.width = Math.min(width, 1024);
+    cvs.height = Math.min(height, 768);
   }
-  
-  cvs.width = Math.min(width, 1024);
-  cvs.height = Math.min(height, 768);
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -95,8 +110,8 @@ if (isMobile) {
     if (!touch && !isStart) {
       joystickActive = false;
       joystickVector = {x:0,y:0};
-      knob.style.left = '40px';
-      knob.style.top = '40px';
+      knob.style.left = '32.5px';
+      knob.style.top = '32.5px';
       return;
     }
     
@@ -106,15 +121,15 @@ if (isMobile) {
       const centerY = rect.top + rect.height/2;
       const dx = touch.clientX - centerX;
       const dy = touch.clientY - centerY;
-      const distance = Math.min(Math.hypot(dx,dy), 40);
+      const distance = Math.min(Math.hypot(dx,dy), 32.5);
       const angle = Math.atan2(dy,dx);
       
       joystickActive = true;
-      joystickVector.x = Math.cos(angle) * (distance/40);
-      joystickVector.y = Math.sin(angle) * (distance/40);
+      joystickVector.x = Math.cos(angle) * (distance/32.5);
+      joystickVector.y = Math.sin(angle) * (distance/32.5);
       
-      knob.style.left = (40 + Math.cos(angle)*distance) + 'px';
-      knob.style.top = (40 + Math.sin(angle)*distance) + 'px';
+      knob.style.left = (32.5 + Math.cos(angle)*distance) + 'px';
+      knob.style.top = (32.5 + Math.sin(angle)*distance) + 'px';
     }
   }
   
