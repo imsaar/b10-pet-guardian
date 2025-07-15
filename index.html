@@ -30,7 +30,7 @@
       <button id="attackBtn">⚡</button>
       <button id="omniBtn">⌚</button>
     </div>
-    <div id="omniHelp">Hold ⌚ then tap alien on wheel</div>
+    <div id="omniHelp">Tap an alien to transform</div>
   </div>
 
 <script>
@@ -87,14 +87,46 @@ let joystickVector = {x:0,y:0};
 
 // Desktop controls
 if (!isMobile) {
-  window.onkeydown = e => keys[e.code] = true;
+  window.onkeydown = e => {
+    keys[e.code] = true;
+    // Toggle Omnitrix with Space on desktop
+    if(e.code === 'Space') {
+      e.preventDefault();
+      omniOpen = !omniOpen;
+      if(omniOpen) {
+        omniTimer = 5000; // 5 seconds auto-close
+      } else {
+        omniTimer = 0;
+      }
+    }
+  };
   window.onkeyup   = e => keys[e.code] = false;
   cvs.onmousemove = e => { 
     const r=cvs.getBoundingClientRect(); 
     mouse.x=(e.clientX-r.left)*(cvs.width/r.width); 
     mouse.y=(e.clientY-r.top)*(cvs.height/r.height); 
   };
-  cvs.onmousedown = e => keys['Mouse0'] = true;
+  cvs.onmousedown = e => {
+    // Check if clicking on Omnitrix wheel
+    if(omniOpen) {
+      const cx = player.x;
+      const cy = player.y - 100;
+      const radius = 80;
+      const dx = mouse.x - cx;
+      const dy = mouse.y - cy;
+      const dist = Math.hypot(dx, dy);
+      
+      if(dist > radius + 20) {
+        // Click outside wheel - close it
+        omniOpen = false;
+        omniTimer = 0;
+      } else {
+        keys['Mouse0'] = true;
+      }
+    } else {
+      keys['Mouse0'] = true;
+    }
+  };
   cvs.onmouseup   = e => keys['Mouse0'] = false;
 }
 cvs.oncontextmenu = e => e.preventDefault();
@@ -144,18 +176,20 @@ if (isMobile) {
   attackBtn.addEventListener('touchstart', e => { e.preventDefault(); keys['Attack'] = true; });
   attackBtn.addEventListener('touchend', e => { e.preventDefault(); keys['Attack'] = false; });
   
-  // Omnitrix button with visual feedback
+  // Omnitrix button - toggle wheel on tap
   omniBtn.addEventListener('touchstart', e => { 
     e.preventDefault(); 
-    keys['Space'] = true; 
-    omniBtn.classList.add('active');
-    document.getElementById('omniHelp').style.display = 'block';
-  });
-  omniBtn.addEventListener('touchend', e => { 
-    e.preventDefault(); 
-    keys['Space'] = false; 
-    omniBtn.classList.remove('active');
-    document.getElementById('omniHelp').style.display = 'none';
+    e.stopPropagation();
+    omniOpen = !omniOpen;
+    omniBtn.classList.toggle('active', omniOpen);
+    if(omniOpen) {
+      omniTimer = 5000; // 5 seconds auto-close
+      document.getElementById('omniHelp').style.display = 'block';
+      document.getElementById('omniHelp').textContent = 'Tap an alien to transform';
+    } else {
+      omniTimer = 0;
+      document.getElementById('omniHelp').style.display = 'none';
+    }
   });
   
   // Touch for aiming and Omnitrix selection
@@ -166,10 +200,32 @@ if (isMobile) {
     mouse.x = (touch.clientX-r.left)*(cvs.width/r.width);
     mouse.y = (touch.clientY-r.top)*(cvs.height/r.height);
     
-    // Check if Omnitrix is open and tap is on wheel
+    // Check if Omnitrix is open
     if(omniOpen) {
-      keys['Mouse0'] = true;
-      setTimeout(() => keys['Mouse0'] = false, 100);
+      const cx = cvs.width/2;
+      const cy = cvs.height/2;
+      const radius = 100;
+      const dx = mouse.x - cx;
+      const dy = mouse.y - cy;
+      const dist = Math.hypot(dx, dy);
+      
+      if(dist < radius && dist > 20) {
+        // Tap on wheel - select alien
+        keys['Mouse0'] = true;
+        setTimeout(() => {
+          keys['Mouse0'] = false;
+          omniOpen = false;
+          omniTimer = 0;
+          document.getElementById('omniBtn').classList.remove('active');
+          document.getElementById('omniHelp').style.display = 'none';
+        }, 100);
+      } else if(dist > radius + 20) {
+        // Tap outside wheel - close it
+        omniOpen = false;
+        omniTimer = 0;
+        document.getElementById('omniBtn').classList.remove('active');
+        document.getElementById('omniHelp').style.display = 'none';
+      }
     }
   });
   
@@ -218,6 +274,7 @@ let particles = [];
 let pickups = [];
 let wave = 1;
 let omniOpen = false;
+let omniTimer = 0;
 
 /* ---------- PARTICLES ---------- */
 function createParticles(x,y,color,count=10) {
@@ -329,12 +386,19 @@ function update(dt){
   // Handle invulnerability
   if(player.invulnerable > 0) player.invulnerable -= dt;
   
-  // Omnitrix toggle
-  if(keys['Space']) { 
-    omniOpen = true; 
-  } else { 
-    omniOpen = false; 
+  // Handle Omnitrix auto-close timer
+  if(omniOpen && omniTimer > 0) {
+    omniTimer -= dt;
+    if(omniTimer <= 0) {
+      omniOpen = false;
+      if(isMobile) {
+        document.getElementById('omniBtn').classList.remove('active');
+        document.getElementById('omniHelp').style.display = 'none';
+      }
+    }
   }
+  
+  // Omnitrix toggle - removed, now handled by button press
   
   // Movement
   let dx=0, dy=0;
@@ -453,7 +517,7 @@ function update(dt){
   }
   
   // Omnitrix selection
-  if (omniOpen && (keys['Mouse0'] || keys['Attack'])) {
+  if (omniOpen && keys['Mouse0']) {
     const cx = isMobile ? cvs.width/2 : player.x;
     const cy = isMobile ? cvs.height/2 : player.y - 100;
     const radius = isMobile ? 100 : 80;
@@ -470,6 +534,14 @@ function update(dt){
         player.hp = Math.min(player.hp, aliens[newForm].hp);
         player.maxHp = aliens[newForm].hp;
         createParticles(player.x, player.y, aliens[newForm].color, 20);
+        
+        // Close Omnitrix after selection
+        omniOpen = false;
+        omniTimer = 0;
+        if(isMobile) {
+          document.getElementById('omniBtn').classList.remove('active');
+          document.getElementById('omniHelp').style.display = 'none';
+        }
       }
     }
   }
@@ -738,7 +810,24 @@ function render(){
   });
   
   // Draw Omnitrix wheel
-  if(omniOpen) drawWheel();
+  if(omniOpen) {
+    drawWheel();
+    
+    // Draw timer countdown
+    if(omniTimer > 0) {
+      ctx.save();
+      const cx = isMobile ? cvs.width/2 : player.x;
+      const cy = isMobile ? cvs.height/2 : player.y - 100;
+      const timerRadius = isMobile ? 115 : 95;
+      
+      ctx.strokeStyle = 'rgba(0,255,0,0.5)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, timerRadius, -Math.PI/2, -Math.PI/2 + (Math.PI*2 * (omniTimer/5000)), false);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }
 
 // Start game
