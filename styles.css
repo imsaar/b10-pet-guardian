@@ -308,3 +308,22 @@ canvas {
     padding: 12px 30px;
   }
 }
+
+/* Device-specific visibility */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none;
+  }
+  
+  .mobile-only {
+    display: block;
+  }
+}
