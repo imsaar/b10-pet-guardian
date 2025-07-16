@@ -9,14 +9,42 @@
 <body>
   <div id="gameContainer">
     <canvas id="game"></canvas>
-    <div id="hud">
+    <div id="startScreen">
+      <h1>Ben 10: Pet Guardians</h1>
+      <div class="instructions">
+        <h2>How to Play</h2>
+        <div class="controls-section">
+          <h3>Desktop Controls:</h3>
+          <ul>
+            <li>Move: WASD or Arrow Keys</li>
+            <li>Shoot: Mouse Click</li>
+            <li>Open Omnitrix: Q</li>
+            <li>Select Alien: Number Keys 1-5</li>
+          </ul>
+        </div>
+        <div class="controls-section">
+          <h3>Mobile Controls:</h3>
+          <ul>
+            <li>Move: Virtual Joystick</li>
+            <li>Shoot: Attack Button</li>
+            <li>Transform: Omnitrix Button</li>
+          </ul>
+        </div>
+        <div class="objective">
+          <h3>Objective:</h3>
+          <p>Survive waves of enemies, collect power-ups, and save pets!</p>
+        </div>
+      </div>
+      <button id="startBtn">Start Game</button>
+    </div>
+    <div id="hud" style="display: none;">
       <div class="hud-item">Health: <span id="hp">100</span></div>
       <div class="hud-item">Score: <span id="scoreVal">0</span></div>
       <div class="hud-item">Wave: <span id="wave">1</span></div>
       <div class="hud-item"><span id="form">Ben</span></div>
       <button id="muteBtn">🔊</button>
     </div>
-    <div id="controls">
+    <div id="controls" style="display: none;">
       <div id="joystick"><div id="joystickKnob"></div></div>
       <button id="attackBtn">⚡</button>
       <button id="omniBtn">⌚</button>

@@ -50,13 +50,35 @@ function resizeCanvas() {
     cvs.style.height = cvs.height + 'px';
   }
 }
+// Game state
+let gameStarted = false;
+
+// Initialize canvas size but don't start game
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Show controls on mobile
-if (isMobile) {
-  document.getElementById('controls').style.display = 'block';
+// Show controls function
+function showControls() {
+  if (isMobile) {
+    document.getElementById('controls').style.display = 'block';
+  }
 }
+
+// Start game function
+function startGame() {
+  gameStarted = true;
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'flex';
+  showControls();
+  requestAnimationFrame(gameLoop);
+}
+
+// Add start button listener
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  startGame();
+});
 
 // Mute button functionality
 const muteBtn = document.getElementById('muteBtn');
@@ -785,6 +807,7 @@ function drawWheel() {
 /* ---------- GAME LOOP ---------- */
 let last=0;
 function gameLoop(ts){
+  if (!gameStarted) return;
   const dt = Math.min(Math.max(ts-last, 0), 50); // Cap dt and ensure non-negative
   last=ts;
   update(dt);
@@ -1297,5 +1320,4 @@ function render(){
   }
 }
 
-// Start game
-requestAnimationFrame(gameLoop);
+// Game will start when start button is clicked

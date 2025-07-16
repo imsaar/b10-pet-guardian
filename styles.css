@@ -184,3 +184,127 @@ canvas {
     margin-left: 8px;
   }
 }
+
+/* Start Screen Styles */
+#startScreen {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid #0ff;
+  border-radius: 20px;
+  padding: 30px;
+  text-align: center;
+  z-index: 100;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+#startScreen h1 {
+  color: #0f0;
+  font-size: 32px;
+  margin: 0 0 20px 0;
+  text-shadow: 0 0 10px #0f0;
+}
+
+#startScreen h2 {
+  color: #0ff;
+  font-size: 24px;
+  margin: 20px 0 15px 0;
+}
+
+#startScreen h3 {
+  color: #fff;
+  font-size: 18px;
+  margin: 15px 0 10px 0;
+}
+
+.instructions {
+  text-align: left;
+  margin: 20px 0;
+}
+
+.controls-section {
+  margin: 15px 0;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15px;
+  border-radius: 10px;
+}
+
+.controls-section ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.controls-section li {
+  padding: 5px 0;
+  color: #ccc;
+}
+
+.objective {
+  margin: 20px 0;
+  background: rgba(0, 255, 0, 0.1);
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.objective p {
+  color: #0f0;
+  margin: 5px 0;
+}
+
+#startBtn {
+  background: linear-gradient(135deg, #0f0, #0a0);
+  color: #000;
+  border: none;
+  padding: 15px 40px;
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
+  margin-top: 20px;
+}
+
+#startBtn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 255, 0, 0.5);
+}
+
+#startBtn:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  #startScreen {
+    padding: 20px;
+    width: 95%;
+  }
+  
+  #startScreen h1 {
+    font-size: 24px;
+  }
+  
+  #startScreen h2 {
+    font-size: 20px;
+  }
+  
+  #startScreen h3 {
+    font-size: 16px;
+  }
+  
+  .controls-section {
+    padding: 10px;
+  }
+  
+  #startBtn {
+    font-size: 20px;
+    padding: 12px 30px;
+  }
+}
