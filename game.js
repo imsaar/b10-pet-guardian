@@ -57,15 +57,6 @@ let gameStarted = false;
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Show/hide appropriate controls based on device
-if (isMobile) {
-  document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'block');
-} else {
-  document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'block');
-}
-
 // Show controls function
 function showControls() {
   if (isMobile) {
@@ -82,18 +73,30 @@ function startGame() {
   requestAnimationFrame(gameLoop);
 }
 
-// Add start button listener
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('startBtn').addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  startGame();
-});
-
-// Mute button functionality
-const muteBtn = document.getElementById('muteBtn');
-muteBtn.addEventListener('click', () => {
-  soundEnabled = !soundEnabled;
-  muteBtn.textContent = soundEnabled ? '🔊' : '🔇';
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Show/hide appropriate controls based on device
+  if (isMobile) {
+    document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'block');
+  } else {
+    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'block');
+  }
+  
+  // Add start button listeners
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('startBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startGame();
+  });
+  
+  // Mute button functionality
+  const muteBtn = document.getElementById('muteBtn');
+  muteBtn.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    muteBtn.textContent = soundEnabled ? '🔊' : '🔇';
+  });
 });
 
 /* ---------- INPUT SYSTEM ---------- */
