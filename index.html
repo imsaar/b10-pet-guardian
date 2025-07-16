@@ -9,7 +9,13 @@
 <body>
   <div id="gameContainer">
     <canvas id="game"></canvas>
-    <div id="hud">Health: <span id="hp">100</span> | Score: <span id="scoreVal">0</span> | Wave: <span id="wave">1</span> | <span id="form">Ben</span> | <button id="muteBtn">🔊</button></div>
+    <div id="hud">
+      <div class="hud-item">Health: <span id="hp">100</span></div>
+      <div class="hud-item">Score: <span id="scoreVal">0</span></div>
+      <div class="hud-item">Wave: <span id="wave">1</span></div>
+      <div class="hud-item"><span id="form">Ben</span></div>
+      <button id="muteBtn">🔊</button>
+    </div>
     <div id="controls">
       <div id="joystick"><div id="joystickKnob"></div></div>
       <button id="attackBtn">⚡</button>
