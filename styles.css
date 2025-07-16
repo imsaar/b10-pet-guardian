@@ -309,21 +309,11 @@ canvas {
   }
 }
 
-/* Device-specific visibility */
+/* Device-specific visibility - default states */
 .desktop-only {
   display: block;
 }
 
 .mobile-only {
   display: none;
-}
-
-@media (max-width: 768px) {
-  .desktop-only {
-    display: none;
-  }
-  
-  .mobile-only {
-    display: block;
-  }
 }
