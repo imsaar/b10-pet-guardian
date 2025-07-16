@@ -76,12 +76,23 @@ function startGame() {
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
   // Show/hide appropriate controls based on device
+  const desktopElements = document.querySelectorAll('.desktop-only');
+  const mobileElements = document.querySelectorAll('.mobile-only');
+  
   if (isMobile) {
-    document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'block');
+    desktopElements.forEach(el => {
+      el.style.setProperty('display', 'none', 'important');
+    });
+    mobileElements.forEach(el => {
+      el.style.setProperty('display', 'block', 'important');
+    });
   } else {
-    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'block');
+    mobileElements.forEach(el => {
+      el.style.setProperty('display', 'none', 'important');
+    });
+    desktopElements.forEach(el => {
+      el.style.setProperty('display', 'block', 'important');
+    });
   }
   
   // Add start button listeners
