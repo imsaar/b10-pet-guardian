@@ -9,12 +9,13 @@ Ben 10: Pet Guardians is a browser-based 2D action game built with vanilla JavaS
 ## Development Commands
 
 - **Run the game**: Open `index.html` directly in a web browser
-- **Local server** (for development): `python3 -m http.server 8000` or `npx http-server`
+- **Local server** (for development): `python3 -m http.server 8000` or `npx http-server` (solo only)
+- **LAN co-op server**: `node server.js` (zero dependencies; serves the game and relays multiplayer messages; `PORT=9000` to change the port)
 - **No build/compile step required** - changes to files are immediately reflected on refresh
 
 ## Architecture
 
-The codebase is organized into three main files:
+The codebase is organized into these files:
 
 ### `index.html`
 - Minimal HTML structure
@@ -35,6 +36,13 @@ The codebase is organized into three main files:
   - Enemy types: Basic, Fast, Tank, Ranged, Boss
   - Particle effects and score popups
 - **Render Pipeline**: Canvas 2D context with sprite rendering and visual effects
+
+### `net.js` and `server.js` (two-player LAN co-op)
+- **Model**: host-authoritative. `net.mode` is `solo`, `host` or `guest`. The host runs the normal `update()` for both players; the guest sends inputs (`{t:'i'}`) and forms (`{t:'form'}`) and renders snapshots (`{t:'s'}`, ~30/s) via `guestUpdate()` (own movement is predicted, everything else is interpolated).
+- **Shared world**: multiplayer uses a fixed `WORLD_W`×`WORLD_H` (1024×768) world scaled to each canvas (`world` / `toWorld()`); solo keeps world = canvas. Game logic must use `world.w`/`world.h`, never `cvs.width`/`cvs.height`.
+- **Players**: `players[]` (index 0 = host/solo, 1 = guest), created by `createPlayer()`. `localPlayer()` is the one on this device. Score is shared (`teamScore`). Per-player behavior lives in `updatePlayer()`; controls are read into `p.input` (`readLocalInput()` locally, `applyRemoteInput()` for the guest).
+- **Effects**: sounds/particles/score popups created on the host are mirrored to the guest via `net.events` (`queueNetEvent()`), so new effect helpers that should be seen by both players need a hook there.
+- **Server**: `server.js` serves a whitelist of static files (add new client files to `STATIC`) and pairs a host and a guest by 4-letter room code over a hand-rolled RFC 6455 WebSocket, relaying everything else untouched.
 
 ### `styles.css`
 - Responsive layout with safe area insets for mobile devices
@@ -79,3 +87,4 @@ The codebase is organized into three main files:
 - Check Omnitrix functionality on different screen sizes
 - Verify touch controls don't interfere with browser UI
 - Test wave progression and difficulty scaling
+- For LAN co-op, test with two browsers/devices against `node server.js`: join, movement, shooting, transforming, game over + host restart, either player disconnecting

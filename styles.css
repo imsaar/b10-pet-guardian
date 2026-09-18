@@ -408,3 +408,121 @@ canvas {
 #restartBtn:hover {
   transform: scale(1.05);
 }
+
+/* Start screen menu + LAN lobby */
+[hidden] {
+  display: none !important;
+}
+
+#startScreen.in-lobby .instructions {
+  display: none;
+}
+
+#menuButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+#menuButtons button,
+#lobby button {
+  margin-top: 0;
+}
+
+#startScreen button.secondary {
+  background: transparent;
+  color: #0ff;
+  border: 2px solid #0ff;
+  padding: 13px 28px;
+  font-size: 20px;
+  font-weight: bold;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+#startScreen button.secondary:hover {
+  background: rgba(0, 255, 255, 0.15);
+  transform: scale(1.05);
+}
+
+#lobby {
+  margin-top: 10px;
+}
+
+.lobby-label {
+  color: #aaa;
+  font-size: 14px;
+}
+
+#roomCode {
+  color: #0f0;
+  font-size: 56px;
+  font-weight: bold;
+  letter-spacing: 12px;
+  text-indent: 12px;
+  text-shadow: 0 0 10px #0f0;
+  margin: 5px 0 10px;
+}
+
+#lobbyUrl {
+  color: #ccc;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+#codeInput {
+  width: 140px;
+  font-size: 32px;
+  font-weight: bold;
+  letter-spacing: 8px;
+  text-align: center;
+  text-transform: uppercase;
+  background: #000;
+  color: #0f0;
+  border: 2px solid #0ff;
+  border-radius: 10px;
+  padding: 8px;
+  margin-right: 10px;
+}
+
+#codeGoBtn {
+  background: linear-gradient(135deg, #0f0, #0a0);
+  color: #000;
+  border: none;
+  padding: 14px 28px;
+  font-size: 20px;
+  font-weight: bold;
+  border-radius: 30px;
+  cursor: pointer;
+}
+
+#lobbyStatus {
+  min-height: 1.4em;
+  color: #ff0;
+  margin: 15px 0;
+}
+
+#lobbyStatus.error {
+  color: #f66;
+}
+
+#toast {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #0ff;
+  border-radius: 20px;
+  padding: 8px 18px;
+  font-size: 14px;
+  z-index: 150;
+  pointer-events: none;
+}
+
+#toast[hidden] {
+  display: none;
+}
