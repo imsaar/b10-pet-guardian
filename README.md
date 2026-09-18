@@ -8,7 +8,7 @@ Survive as many waves as you can. A new wave arrives each time you clear the las
 
 ### Desktop Controls
 - **Movement**: Arrow keys or WASD
-- **Attack**: Mouse click (aims at the mouse) or Space bar (fires in the direction you're moving; aims at the mouse when standing still)
+- **Attack**: Mouse click (aims at the mouse) or Space bar (fires opposite to the direction you're moving; aims at the mouse when standing still)
 - **Omnitrix**: Q toggles the alien wheel (it closes by itself after 5 seconds)
 - **Select Alien**: Click an alien in the wheel or press its number key (1-5)
 
