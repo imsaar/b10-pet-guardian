@@ -35,7 +35,25 @@
           <p>Survive waves of enemies, collect power-ups, and save pets!</p>
         </div>
       </div>
-      <button id="startBtn">Start Game</button>
+      <div id="menuButtons">
+        <button id="startBtn">Solo Game</button>
+        <button id="hostBtn" class="secondary">Host LAN Game</button>
+        <button id="joinBtn" class="secondary">Join LAN Game</button>
+      </div>
+      <div id="lobby" hidden>
+        <h2 id="lobbyTitle"></h2>
+        <div id="lobbyHost" hidden>
+          <div class="lobby-label">Room code</div>
+          <div id="roomCode">----</div>
+          <div id="lobbyUrl"></div>
+        </div>
+        <div id="lobbyJoin" hidden>
+          <input id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <button id="codeGoBtn">Join</button>
+        </div>
+        <p id="lobbyStatus"></p>
+        <button id="lobbyCancel" class="secondary">Cancel</button>
+      </div>
     </div>
     <div id="hud" style="display: none;">
       <div class="hud-item">Health: <span id="hp">100</span></div>
@@ -60,8 +78,10 @@
       <button id="omniBtn">⌚</button>
     </div>
     <div id="omniHelp">Tap an alien to transform</div>
+    <div id="toast" hidden></div>
   </div>
   
   <script src="game.js"></script>
+  <script src="net.js"></script>
 </body>
 </html>

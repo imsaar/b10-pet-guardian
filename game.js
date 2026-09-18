@@ -4,6 +4,62 @@
 const cvs = document.getElementById('game'), ctx = cvs.getContext('2d');
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+// Game mode (see net.js for the LAN part):
+//   solo  - the world is the canvas itself
+//   host  - runs the simulation for both players in a fixed-size shared world
+//   guest - sends its input to the host and renders the state the host sends back
+const WORLD_W = 1024, WORLD_H = 768;
+const net = { mode: 'solo', localIdx: 0, role: null, ws: null, code: null, peerConnected: false, disconnected: false, events: [] };
+const world = { w: 0, h: 0, scale: 1, ox: 0, oy: 0 };
+
+// Below this zoom the shared world is too small to play, so the view zooms in and follows the player instead
+const MIN_WORLD_SCALE = 0.6;
+
+// Fit the world to the canvas; multiplayer worlds are letterboxed so both screens see the same playfield
+function updateWorld() {
+  if (net.mode === 'solo') {
+    world.w = cvs.width;
+    world.h = cvs.height;
+    world.scale = 1;
+    world.ox = world.oy = 0;
+  } else {
+    world.w = WORLD_W;
+    world.h = WORLD_H;
+    world.scale = Math.max(Math.min(cvs.width / WORLD_W, cvs.height / WORLD_H), MIN_WORLD_SCALE);
+    updateCamera();
+  }
+}
+
+// Position the world on the canvas: centered when it fits, otherwise following the local player
+function updateCamera() {
+  if (net.mode === 'solo') return;
+  const me = localPlayer();
+  const axis = (canvasSize, worldSize, focus) => {
+    const view = canvasSize / world.scale;
+    if (view >= worldSize) return (canvasSize - worldSize * world.scale) / 2;
+    return -Math.max(0, Math.min(worldSize - view, focus - view / 2)) * world.scale;
+  };
+  world.ox = axis(cvs.width, WORLD_W, me.x);
+  world.oy = axis(cvs.height, WORLD_H, me.y);
+}
+
+// World position under the middle of the canvas (where the mobile Omnitrix wheel is drawn)
+function viewCenter() {
+  return {
+    x: (cvs.width / 2 - world.ox) / world.scale,
+    y: (cvs.height / 2 - world.oy) / world.scale
+  };
+}
+
+// Convert a client (screen) position to world coordinates
+function toWorld(clientX, clientY) {
+  const r = cvs.getBoundingClientRect();
+  return {
+    x: ((clientX - r.left) * (cvs.width / r.width) - world.ox) / world.scale,
+    y: ((clientY - r.top) * (cvs.height / r.height) - world.oy) / world.scale
+  };
+}
+
 // Set CSS variables for safe areas
 document.documentElement.style.setProperty('--sat', getComputedStyle(document.documentElement).paddingTop);
 document.documentElement.style.setProperty('--sab', getComputedStyle(document.documentElement).paddingBottom);
@@ -49,6 +105,7 @@ function resizeCanvas() {
     cvs.style.width = cvs.width + 'px';
     cvs.style.height = cvs.height + 'px';
   }
+  updateWorld();
 }
 // Game state
 let gameStarted = false;
@@ -65,24 +122,28 @@ function showControls() {
 }
 
 // Start game function
-function startGame() {
+function startGame(mode) {
   if (gameStarted) return;
+  net.mode = mode;
+  net.localIdx = mode === 'guest' ? 1 : 0;
+  updateWorld();
   resetGame();
   gameStarted = true;
   document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameOverModal').hidden = true;
+  document.getElementById('hudRestartBtn').hidden = true;
   document.getElementById('hud').style.display = 'flex';
   showControls();
+  if (mode === 'host') netAnnounceStart();
   requestAnimationFrame(gameLoop);
 }
 
 // Reset all run state back to a fresh game
 function resetGame() {
-  Object.assign(player, {
-    x:400, y:300, hp:aliens.ben.hp, maxHp:aliens.ben.hp,
-    form:'ben', cooldown:0, invulnerable:0, score:0,
-    facing:1, moving:false
-  });
-  player.pets.forEach(p => p.cooldown = 0);
+  players = [createPlayer(0)];
+  // A guest's players are filled in from the host's first snapshot
+  if ((net.mode === 'host' && net.peerConnected) || net.mode === 'guest') players.push(createPlayer(1));
+  teamScore = 0;
   enemies = [];
   projectiles = [];
   particles = [];
@@ -90,7 +151,8 @@ function resetGame() {
   wave = 1;
   omniOpen = false;
   omniTimer = 0;
-
+  net.events = [];
+  
   // Clear held inputs so nothing is stuck from the previous run
   Object.keys(keys).forEach(k => keys[k] = false);
   joystickActive = false;
@@ -105,21 +167,28 @@ function resetGame() {
 // Game over modal
 function endGame() {
   gameStarted = false;
-  document.getElementById('finalScore').textContent = Math.floor(player.score);
+  const isGuest = net.mode === 'guest';
+  document.getElementById('gameOverTitle').textContent = 'Game Over';
+  document.getElementById('finalScore').textContent = Math.floor(teamScore);
   document.getElementById('finalWave').textContent = Math.floor(wave);
+  // Only the host can restart a shared game
+  const restartBtn = document.getElementById('restartBtn');
+  restartBtn.disabled = isGuest;
+  restartBtn.textContent = isGuest ? 'Waiting for host…' : 'Play Again';
   document.getElementById('gameOverModal').hidden = false;
-  document.getElementById('restartBtn').focus();
+  restartBtn.focus();
+  if (net.mode === 'host') netAnnounceGameOver();
 }
 
 function dismissGameOver() {
   document.getElementById('gameOverModal').hidden = true;
-  document.getElementById('hudRestartBtn').hidden = false;
+  document.getElementById('hudRestartBtn').hidden = net.mode === 'guest';
 }
 
 function restartGame() {
-  document.getElementById('gameOverModal').hidden = true;
-  document.getElementById('hudRestartBtn').hidden = true;
-  startGame();
+  // Nothing to restart once the host is gone: go back to the menu
+  if (net.disconnected) { location.reload(); return; }
+  startGame(net.mode);
 }
 
 // Initialize when DOM is ready
@@ -145,10 +214,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Add start button listeners
-  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('startBtn').addEventListener('click', () => startGame('solo'));
   document.getElementById('startBtn').addEventListener('touchstart', (e) => {
     e.preventDefault();
-    startGame();
+    startGame('solo');
   });
   
   // Game over modal listeners
@@ -180,6 +249,7 @@ let joystickVector = {x:0,y:0};
 // Desktop controls
 if (!isMobile) {
   window.onkeydown = e => {
+    if(e.target.tagName === 'INPUT') return; // typing a room code, not playing
     keys[e.code] = true;
     // Toggle Omnitrix with Q key on desktop
     if(e.code === 'KeyQ') {
@@ -199,29 +269,24 @@ if (!isMobile) {
       const alienList = Object.keys(aliens);
       if(num <= alienList.length) {
         const newForm = alienList[num - 1];
-        if(newForm !== player.form) {
-          player.form = newForm;
-          player.hp = Math.min(player.hp, aliens[newForm].hp);
-          player.maxHp = aliens[newForm].hp;
-          createParticles(player.x, player.y, aliens[newForm].color, 20);
-          sounds.transform();
-          omniOpen = false;
-          omniTimer = 0;
+        if(newForm !== localPlayer().form) {
+          requestForm(newForm);
+          closeOmnitrix();
         }
       }
     }
   };
   window.onkeyup   = e => keys[e.code] = false;
   cvs.onmousemove = e => { 
-    const r=cvs.getBoundingClientRect(); 
-    mouse.x=(e.clientX-r.left)*(cvs.width/r.width); 
-    mouse.y=(e.clientY-r.top)*(cvs.height/r.height); 
+    const w = toWorld(e.clientX, e.clientY);
+    mouse.x = w.x;
+    mouse.y = w.y;
   };
   cvs.onmousedown = e => {
     // Check if clicking on Omnitrix wheel
     if(omniOpen) {
-      const cx = player.x;
-      const cy = player.y - 100;
+      const cx = localPlayer().x;
+      const cy = localPlayer().y - 100;
       const radius = 80;
       const dx = mouse.x - cx;
       const dy = mouse.y - cy;
@@ -307,14 +372,14 @@ if (isMobile) {
   cvs.addEventListener('touchstart', e => {
     e.preventDefault();
     const touch = e.touches[0];
-    const r = cvs.getBoundingClientRect();
-    mouse.x = (touch.clientX-r.left)*(cvs.width/r.width);
-    mouse.y = (touch.clientY-r.top)*(cvs.height/r.height);
+    const w = toWorld(touch.clientX, touch.clientY);
+    mouse.x = w.x;
+    mouse.y = w.y;
     
     // Check if Omnitrix is open
     if(omniOpen) {
-      const cx = cvs.width/2;
-      const cy = cvs.height/2;
+      const cx = viewCenter().x;
+      const cy = viewCenter().y;
       const radius = 100;
       const dx = mouse.x - cx;
       const dy = mouse.y - cy;
@@ -343,9 +408,9 @@ if (isMobile) {
   cvs.addEventListener('touchmove', e => {
     e.preventDefault();
     const touch = e.touches[0];
-    const r = cvs.getBoundingClientRect();
-    mouse.x = (touch.clientX-r.left)*(cvs.width/r.width);
-    mouse.y = (touch.clientY-r.top)*(cvs.height/r.height);
+    const w = toWorld(touch.clientX, touch.clientY);
+    mouse.x = w.x;
+    mouse.y = w.y;
   });
 }
 
@@ -437,6 +502,7 @@ let soundEnabled = true;
 
 // Sound effect functions
 function playSound(type, frequency = 440, duration = 0.1, volume = 0.3) {
+  queueNetEvent(['s', type, frequency, duration, volume]);
   if (!soundEnabled) return;
   
   try {
@@ -494,19 +560,27 @@ const sounds = {
 };
 
 /* ---------- GAME STATE ---------- */
-const player = {
-  x:400,y:300, hp:100, maxHp:100, speed:4,
-  form:'ben', cooldown:0, invulnerable:0, score:0,
-  animFrame: 0,
-  animTime: 0,
-  facing: 1, // 1 for right, -1 for left
-  moving: false,
-  pets:[
-    {type:'stinkfly', x:0,y:0, cooldown:0, color:'#0f8'},
-    {type:'heatblast',x:0,y:0, cooldown:0, color:'#f50'},
-    {type:'grey',     x:0,y:0, cooldown:0, color:'#88f'}
-  ]
-};
+// Players: index 0 is the host (or the solo player), index 1 the LAN guest.
+// `input` is what the player is asking for this frame; it comes from the local
+// controls for player 0 and over the network for player 1.
+function createPlayer(idx) {
+  return {
+    idx,
+    x:400 + idx*100, y:300, hp:100, maxHp:100,
+    form:'ben', cooldown:0, invulnerable:0,
+    alive: true,
+    facing: 1, // 1 for right, -1 for left
+    moving: false,
+    input: {dx:0, dy:0, attack:false, aimX:0, aimY:0},
+    pets:[
+      {type:'stinkfly', x:0,y:0, cooldown:0, color:'#0f8'},
+      {type:'heatblast',x:0,y:0, cooldown:0, color:'#f50'},
+      {type:'grey',     x:0,y:0, cooldown:0, color:'#88f'}
+    ]
+  };
+}
+let players = [createPlayer(0)];
+let teamScore = 0; // shared by both players
 
 const aliens = {
   ben:       {hp:100,speed:4,atk:10,color:'#2a5',range:150},
@@ -654,7 +728,7 @@ function drawEnemySprite(x, y, type) {
 }
 
 /* ---------- ALIEN SPRITES ---------- */
-function drawAlienSprite(x, y, form, scale = 1) {
+function drawAlienSprite(x, y, form, scale = 1, facing = 1) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
@@ -664,7 +738,7 @@ function drawAlienSprite(x, y, form, scale = 1) {
       // Use our custom sprite
       if(benImg.complete) {
         const imgScale = 1.0; // Full size for pixel art sprite
-        ctx.scale(player.facing, 1);
+        ctx.scale(facing, 1);
         ctx.drawImage(benImg,
           -benImg.width*imgScale/2,
           -benImg.height*imgScale/2,
@@ -792,6 +866,7 @@ function drawAlienSprite(x, y, form, scale = 1) {
 
 /* ---------- PARTICLES ---------- */
 function createParticles(x,y,color,count=10) {
+  queueNetEvent(['p', Math.round(x), Math.round(y), color, count]);
   for(let i=0;i<count;i++) {
     particles.push({
       x,y,
@@ -802,6 +877,27 @@ function createParticles(x,y,color,count=10) {
       size:Math.random()*3+2
     });
   }
+}
+
+// Floating score text
+function addScorePopup(x, y, text) {
+  queueNetEvent(['t', Math.round(x), Math.round(y), text]);
+  particles.push({
+    x,
+    y: y - 20,
+    vx: 0,
+    vy: -1,
+    life: 60,
+    color: '#ff0',
+    size: 0,
+    text,
+    isText: true
+  });
+}
+
+// The host mirrors sounds and effects to the guest, who only renders
+function queueNetEvent(ev) {
+  if (net.mode === 'host' && net.peerConnected && net.events.length < 60) net.events.push(ev);
 }
 
 /* ---------- PICKUPS ---------- */
@@ -819,8 +915,9 @@ function spawnPickup(x,y) {
 /* ---------- OMNITRIX WHEEL ---------- */
 function drawWheel() {
   // Position wheel in center of screen on mobile for easier access
-  const cx = isMobile ? cvs.width/2 : player.x;
-  const cy = isMobile ? cvs.height/2 : player.y-100;
+  const me = localPlayer();
+  const cx = isMobile ? viewCenter().x : me.x;
+  const cy = isMobile ? viewCenter().y : me.y-100;
   const radius = isMobile ? 100 : 80;
   
   ctx.save();
@@ -865,7 +962,7 @@ function drawWheel() {
     }
     
     // Alien icon
-    drawAlienSprite(x, y, name, 0.8);
+    drawAlienSprite(x, y, name, 0.8, me.facing);
     
     // Name
     ctx.fillStyle='#fff';
@@ -894,30 +991,30 @@ function gameLoop(ts){
   if (!gameStarted) return;
   const dt = Math.min(Math.max(ts-last, 0), 50); // Cap dt and ensure non-negative
   last=ts;
-  update(dt);
+  if (net.mode === 'guest') guestUpdate(dt); else update(dt);
   render();
+  if (net.mode === 'host') hostSendSnapshot();
   requestAnimationFrame(gameLoop);
 }
 
-function update(dt){
-  // Handle invulnerability
-  if(player.invulnerable > 0) player.invulnerable -= dt;
-  
-  // Handle Omnitrix auto-close timer
-  if(omniOpen && omniTimer > 0) {
-    omniTimer -= dt;
-    if(omniTimer <= 0) {
-      omniOpen = false;
-      if(isMobile) {
-        document.getElementById('omniBtn').classList.remove('active');
-        document.getElementById('omniHelp').style.display = 'none';
-      }
-    }
-  }
-  
-  // Omnitrix toggle - removed, now handled by button press
-  
-  // Movement
+// The player controlled on this device
+function localPlayer() {
+  return players[net.localIdx] || players[0];
+}
+
+function nearestAlivePlayer(x, y) {
+  let best = null, bestDist = Infinity;
+  players.forEach(p => {
+    if(!p.alive) return;
+    const d = Math.hypot(p.x-x, p.y-y);
+    if(d < bestDist) { bestDist = d; best = p; }
+  });
+  return best;
+}
+
+// Read this device's controls into an input for the local player
+function readLocalInput() {
+  const me = localPlayer();
   let dx=0, dy=0;
   if(joystickActive) {
     dx = joystickVector.x;
@@ -931,124 +1028,70 @@ function update(dt){
     if(len){ dx/=len; dy/=len; }
   }
   
-  const spd = aliens[player.form].speed;
-  const margin = 25; // Increased margin for mobile
-  const oldX = player.x;
-  player.x = Math.max(margin,Math.min(cvs.width-margin, player.x+dx*spd));
-  player.y = Math.max(margin,Math.min(cvs.height-margin, player.y+dy*spd));
-  
-  // Update animation state
-  player.moving = (dx !== 0 || dy !== 0);
-  if(dx !== 0) {
-    player.facing = dx > 0 ? 1 : -1;
+  // Auto-aim for mobile
+  let aimX = mouse.x;
+  let aimY = mouse.y;
+  if(isMobile && enemies.length > 0) {
+    // Find nearest enemy for auto-aim
+    let nearest = enemies[0];
+    let minDist = Math.hypot(enemies[0].x-me.x, enemies[0].y-me.y);
+    enemies.forEach(e => {
+      const dist = Math.hypot(e.x-me.x, e.y-me.y);
+      if(dist < minDist) {
+        minDist = dist;
+        nearest = e;
+      }
+    });
+    aimX = nearest.x;
+    aimY = nearest.y;
   }
   
-  // Animation frame handling removed - using static sprite
+  return {
+    dx, dy,
+    attack: !!(keys['Mouse0'] || keys['Attack'] || keys['Space']) && !omniOpen,
+    aimX, aimY
+  };
+}
+
+/* ---------- OMNITRIX (local UI) ---------- */
+function closeOmnitrix() {
+  omniOpen = false;
+  omniTimer = 0;
+  if(isMobile) {
+    document.getElementById('omniBtn').classList.remove('active');
+    document.getElementById('omniHelp').style.display = 'none';
+  }
+}
+
+// Ask for a transformation: applied right away when we run the simulation, sent to the host otherwise
+function requestForm(form) {
+  if(!aliens[form]) return;
+  if(net.mode === 'guest') netSend({t:'form', form});
+  else setForm(localPlayer(), form);
+}
+
+function setForm(p, form) {
+  if(!aliens[form] || form === p.form) return;
+  p.form = form;
+  p.hp = Math.min(p.hp, aliens[form].hp);
+  p.maxHp = aliens[form].hp;
+  createParticles(p.x, p.y, aliens[form].color, 20);
+  sounds.transform();
+}
+
+function updateOmnitrix(dt) {
+  const me = localPlayer();
   
-  // Pets follow and attack
-  player.pets.forEach((p,i)=>{
-    const angle = Date.now()/500 + i*Math.PI*2/3;
-    p.x = player.x + Math.cos(angle)*60;
-    p.y = player.y + Math.sin(angle)*60;
-    
-    // Pet attacks
-    if(p.cooldown > 0) p.cooldown -= dt;
-    if(p.cooldown <= 0 && enemies.length > 0) {
-      // Find nearest enemy
-      let nearest = null;
-      let minDist = Infinity;
-      enemies.forEach(e => {
-        const dist = Math.hypot(e.x-p.x, e.y-p.y);
-        if(dist < minDist && dist < 150) {
-          minDist = dist;
-          nearest = e;
-        }
-      });
-      
-      if(nearest) {
-        const a = Math.atan2(nearest.y-p.y, nearest.x-p.x);
-        projectiles.push({
-          x:p.x, y:p.y,
-          vx:Math.cos(a)*6, vy:Math.sin(a)*6,
-          life:20,
-          dmg:5,
-          color:p.color,
-          isPet:true
-        });
-        p.cooldown = 1000;
-      }
-    }
-  });
-  
-  // Player attack
-  if(player.cooldown>0) player.cooldown-=dt;
-  if((keys['Mouse0'] || keys['Attack'] || keys['Space']) && !omniOpen && player.cooldown<=0){
-    // Auto-aim for mobile
-    let targetX = mouse.x;
-    let targetY = mouse.y;
-    
-    if(isMobile && enemies.length > 0) {
-      // Find nearest enemy for auto-aim
-      let nearest = enemies[0];
-      let minDist = Math.hypot(enemies[0].x-player.x, enemies[0].y-player.y);
-      enemies.forEach(e => {
-        const dist = Math.hypot(e.x-player.x, e.y-player.y);
-        if(dist < minDist) {
-          minDist = dist;
-          nearest = e;
-        }
-      });
-      targetX = nearest.x;
-      targetY = nearest.y;
-    }
-    
-    const a = Math.atan2(targetY-player.y, targetX-player.x);
-    const range = aliens[player.form].range;
-    
-    // Special attacks for different forms
-    if(player.form === 'heatblast') {
-      // Fire spread
-      for(let i=-1; i<=1; i++) {
-        projectiles.push({
-          x:player.x, y:player.y,
-          vx:Math.cos(a+i*0.2)*8, vy:Math.sin(a+i*0.2)*8,
-          life:range/8,
-          dmg: aliens[player.form].atk,
-          color: '#ff5500',
-          size: 8
-        });
-      }
-      sounds.shoot();
-    } else if(player.form === 'cannonbolt') {
-      // Big projectile
-      projectiles.push({
-        x:player.x, y:player.y,
-        vx:Math.cos(a)*6, vy:Math.sin(a)*6,
-        life:range/6,
-        dmg: aliens[player.form].atk,
-        color: aliens[player.form].color,
-        size: 15
-      });
-      sounds.shoot();
-    } else {
-      // Normal projectile
-      projectiles.push({
-        x:player.x, y:player.y,
-        vx:Math.cos(a)*10, vy:Math.sin(a)*10,
-        life:range/10,
-        dmg: aliens[player.form].atk,
-        color: aliens[player.form].color,
-        size: 6
-      });
-      sounds.shoot();
-    }
-    player.cooldown = player.form === 'xlr8' ? 150 : 300;
+  // Auto-close timer
+  if(omniOpen && omniTimer > 0) {
+    omniTimer -= dt;
+    if(omniTimer <= 0) closeOmnitrix();
   }
   
-  // Omnitrix selection
+  // Selection by mouse/touch
   if (omniOpen && keys['Mouse0']) {
-    const cx = isMobile ? cvs.width/2 : player.x;
-    const cy = isMobile ? cvs.height/2 : player.y - 100;
+    const cx = isMobile ? viewCenter().x : me.x;
+    const cy = isMobile ? viewCenter().y : me.y - 100;
     const radius = isMobile ? 100 : 80;
     const dx = mouse.x - cx, dy = mouse.y - cy;
     if (Math.hypot(dx, dy) < radius && Math.hypot(dx, dy) > 20) {
@@ -1058,36 +1101,126 @@ function update(dt){
       if (angle < 0) angle += Math.PI * 2;
       const idx = Math.floor(angle / slice) % list.length;
       const newForm = list[idx];
-      if(newForm !== player.form) {
-        player.form = newForm;
-        player.hp = Math.min(player.hp, aliens[newForm].hp);
-        player.maxHp = aliens[newForm].hp;
-        createParticles(player.x, player.y, aliens[newForm].color, 20);
-        sounds.transform();
-        
+      if(newForm !== me.form) {
+        requestForm(newForm);
         // Close Omnitrix after selection
-        omniOpen = false;
-        omniTimer = 0;
-        if(isMobile) {
-          document.getElementById('omniBtn').classList.remove('active');
-          document.getElementById('omniHelp').style.display = 'none';
-        }
+        closeOmnitrix();
       }
     }
   }
+}
+
+/* ---------- PLAYERS ---------- */
+function movePlayer(p) {
+  const {dx, dy} = p.input;
+  const spd = aliens[p.form].speed;
+  const margin = 25; // Increased margin for mobile
+  p.x = Math.max(margin,Math.min(world.w-margin, p.x+dx*spd));
+  p.y = Math.max(margin,Math.min(world.h-margin, p.y+dy*spd));
   
-  // Update projectiles - Limit array size to prevent memory exhaustion
-  projectiles = projectiles.filter(p=>{
-    p.x+=p.vx; p.y+=p.vy; p.life--;
-    return p.life>0 && p.x>0 && p.x<cvs.width && p.y>0 && p.y<cvs.height;
+  // Update animation state
+  p.moving = (dx !== 0 || dy !== 0);
+  if(dx !== 0) {
+    p.facing = dx > 0 ? 1 : -1;
+  }
+}
+
+function positionPets(p) {
+  p.pets.forEach((pet,i)=>{
+    const angle = Date.now()/500 + i*Math.PI*2/3;
+    pet.x = p.x + Math.cos(angle)*60;
+    pet.y = p.y + Math.sin(angle)*60;
+  });
+}
+
+function updatePlayer(p, dt) {
+  if(!p.alive) return;
+  
+  // Handle invulnerability
+  if(p.invulnerable > 0) p.invulnerable -= dt;
+  
+  movePlayer(p);
+  
+  // Pets follow and attack
+  positionPets(p);
+  p.pets.forEach(pet=>{
+    if(pet.cooldown > 0) pet.cooldown -= dt;
+    if(pet.cooldown <= 0 && enemies.length > 0) {
+      // Find nearest enemy
+      let nearest = null;
+      let minDist = Infinity;
+      enemies.forEach(e => {
+        const dist = Math.hypot(e.x-pet.x, e.y-pet.y);
+        if(dist < minDist && dist < 150) {
+          minDist = dist;
+          nearest = e;
+        }
+      });
+      
+      if(nearest) {
+        const a = Math.atan2(nearest.y-pet.y, nearest.x-pet.x);
+        projectiles.push({
+          x:pet.x, y:pet.y,
+          vx:Math.cos(a)*6, vy:Math.sin(a)*6,
+          life:20,
+          dmg:5,
+          color:pet.color,
+          isPet:true
+        });
+        pet.cooldown = 1000;
+      }
+    }
   });
   
-  // Limit projectiles array to prevent memory exhaustion
-  if(projectiles.length > 100) {
-    projectiles = projectiles.slice(-100);
+  // Player attack
+  if(p.cooldown>0) p.cooldown-=dt;
+  if(p.input.attack && p.cooldown<=0){
+    const a = Math.atan2(p.input.aimY-p.y, p.input.aimX-p.x);
+    const range = aliens[p.form].range;
+    
+    // Special attacks for different forms
+    if(p.form === 'heatblast') {
+      // Fire spread
+      for(let i=-1; i<=1; i++) {
+        projectiles.push({
+          x:p.x, y:p.y,
+          vx:Math.cos(a+i*0.2)*8, vy:Math.sin(a+i*0.2)*8,
+          life:range/8,
+          dmg: aliens[p.form].atk,
+          color: '#ff5500',
+          size: 8
+        });
+      }
+      sounds.shoot();
+    } else if(p.form === 'cannonbolt') {
+      // Big projectile
+      projectiles.push({
+        x:p.x, y:p.y,
+        vx:Math.cos(a)*6, vy:Math.sin(a)*6,
+        life:range/6,
+        dmg: aliens[p.form].atk,
+        color: aliens[p.form].color,
+        size: 15
+      });
+      sounds.shoot();
+    } else {
+      // Normal projectile
+      projectiles.push({
+        x:p.x, y:p.y,
+        vx:Math.cos(a)*10, vy:Math.sin(a)*10,
+        life:range/10,
+        dmg: aliens[p.form].atk,
+        color: aliens[p.form].color,
+        size: 6
+      });
+      sounds.shoot();
+    }
+    p.cooldown = p.form === 'xlr8' ? 150 : 300;
   }
-  
-  // Update particles - Limit array size to prevent memory exhaustion
+}
+
+function updateParticles() {
+  // Limit array size to prevent memory exhaustion
   particles = particles.filter(p => {
     p.x += p.vx;
     p.y += p.vy;
@@ -1096,18 +1229,49 @@ function update(dt){
     return p.life > 0;
   });
   
-  // Limit particles array to prevent memory exhaustion
   if(particles.length > 500) {
     particles = particles.slice(-500);
   }
+}
+
+function updateHud() {
+  const me = localPlayer();
+  // Sanitize all values to prevent XSS
+  document.getElementById('hp').textContent = Math.floor(me.hp);
+  document.getElementById('wave').textContent = Math.floor(wave);
+  document.getElementById('form').textContent = String(me.form).charAt(0).toUpperCase() + String(me.form).slice(1);
+  document.getElementById('scoreVal').textContent = Math.floor(teamScore);
+}
+
+/* ---------- SIMULATION (solo and host) ---------- */
+function update(dt){
+  updateOmnitrix(dt);
+  
+  players[0].input = readLocalInput();
+  if (net.mode === 'host') expireStaleInput(players[1]);
+  players.forEach(p => updatePlayer(p, dt));
+  
+  // Update projectiles - Limit array size to prevent memory exhaustion
+  projectiles = projectiles.filter(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.life--;
+    return p.life>0 && p.x>0 && p.x<world.w && p.y>0 && p.y<world.h;
+  });
+  
+  // Limit projectiles array to prevent memory exhaustion
+  if(projectiles.length > 100) {
+    projectiles = projectiles.slice(-100);
+  }
+  
+  updateParticles();
   
   // Update pickups
   pickups = pickups.filter(p => {
     p.life--;
     // Check collection
-    if(Math.hypot(p.x-player.x, p.y-player.y) < 30) {
+    const collector = players.find(pl => pl.alive && Math.hypot(p.x-pl.x, p.y-pl.y) < 30);
+    if(collector) {
       if(p.type === 'health') {
-        player.hp = Math.min(player.maxHp, player.hp + p.value);
+        collector.hp = Math.min(collector.maxHp, collector.hp + p.value);
         createParticles(p.x, p.y, '#0f0', 15);
         sounds.pickup();
       }
@@ -1118,6 +1282,16 @@ function update(dt){
   
   // Spawn enemies - Limit wave size to prevent performance issues
   if(enemies.length === 0){
+    // A new wave brings back any fallen player at half health
+    players.forEach(p => {
+      if(!p.alive) {
+        p.alive = true;
+        p.hp = Math.ceil(p.maxHp/2);
+        p.invulnerable = 2000;
+        createParticles(p.x, p.y, '#0f0', 20);
+      }
+    });
+    
     const maxEnemies = Math.min(wave + 2, 20); // Cap at 20 enemies per wave
     for(let i=0; i<maxEnemies; i++){
       const types = Object.keys(enemyTypes);
@@ -1131,10 +1305,10 @@ function update(dt){
       const side = Math.floor(Math.random()*4);
       let x,y;
       switch(side) {
-        case 0: x=Math.random()*cvs.width; y=-30; break;
-        case 1: x=cvs.width+30; y=Math.random()*cvs.height; break;
-        case 2: x=Math.random()*cvs.width; y=cvs.height+30; break;
-        case 3: x=-30; y=Math.random()*cvs.height; break;
+        case 0: x=Math.random()*world.w; y=-30; break;
+        case 1: x=world.w+30; y=Math.random()*world.h; break;
+        case 2: x=Math.random()*world.w; y=world.h+30; break;
+        case 3: x=-30; y=Math.random()*world.h; break;
       }
       
       enemies.push({
@@ -1153,12 +1327,14 @@ function update(dt){
   // Update enemies
   enemies.forEach(e=>{
     const et = enemyTypes[e.type];
+    const target = nearestAlivePlayer(e.x, e.y);
+    if(!target) return;
     
     if(e.hitCooldown > 0) e.hitCooldown -= dt;
     
     // Movement (except ranged which keeps distance)
-    if(e.type !== 'ranged' || Math.hypot(player.x-e.x,player.y-e.y) > 200) {
-      const a = Math.atan2(player.y-e.y,player.x-e.x);
+    if(e.type !== 'ranged' || Math.hypot(target.x-e.x,target.y-e.y) > 200) {
+      const a = Math.atan2(target.y-e.y,target.x-e.x);
       e.x += Math.cos(a)*et.speed;
       e.y += Math.sin(a)*et.speed;
     }
@@ -1166,8 +1342,8 @@ function update(dt){
     // Ranged enemy shoots
     if(e.type === 'ranged') {
       if(e.shootCooldown > 0) e.shootCooldown -= dt;
-      if(e.shootCooldown <= 0 && Math.hypot(player.x-e.x,player.y-e.y) < et.range) {
-        const a = Math.atan2(player.y-e.y,player.x-e.x);
+      if(e.shootCooldown <= 0 && Math.hypot(target.x-e.x,target.y-e.y) < et.range) {
+        const a = Math.atan2(target.y-e.y,target.x-e.x);
         projectiles.push({
           x:e.x, y:e.y,
           vx:Math.cos(a)*5, vy:Math.sin(a)*5,
@@ -1182,11 +1358,14 @@ function update(dt){
     }
     
     // Contact damage
-    if(Math.hypot(player.x-e.x,player.y-e.y) < 30 && e.hitCooldown <= 0 && player.invulnerable <= 0){
-      player.hp = Math.max(0, player.hp-et.atk);
-      player.invulnerable = 1000; // 1 second of invulnerability
-      e.hitCooldown = 1000;
-      createParticles(player.x, player.y, '#f00', 10);
+    if(e.hitCooldown <= 0) {
+      const victim = players.find(p => p.alive && p.invulnerable <= 0 && Math.hypot(p.x-e.x,p.y-e.y) < 30);
+      if(victim) {
+        victim.hp = Math.max(0, victim.hp-et.atk);
+        victim.invulnerable = 1000; // 1 second of invulnerability
+        e.hitCooldown = 1000;
+        createParticles(victim.x, victim.y, '#f00', 10);
+      }
     }
   });
   
@@ -1204,32 +1383,23 @@ function update(dt){
           
           if(e.hp <= 0) {
             const points = et.score * wave;
-            player.score += points;
+            teamScore += points;
             createParticles(e.x, e.y, et.color, 15);
             spawnPickup(e.x, e.y);
             
             // Show score popup - Sanitize points value
-            particles.push({
-              x: e.x,
-              y: e.y - 20,
-              vx: 0,
-              vy: -1,
-              life: 60,
-              color: '#ff0',
-              size: 0,
-              text: `+${Math.floor(points)}`,
-              isText: true
-            });
+            addScorePopup(e.x, e.y, `+${Math.floor(points)}`);
           }
         }
       });
     } else {
-      // Enemy projectiles hit player
-      if(Math.hypot(p.x-player.x,p.y-player.y) < 20 && player.invulnerable <= 0){
-        player.hp = Math.max(0, player.hp-p.dmg);
-        player.invulnerable = 1000;
+      // Enemy projectiles hit players
+      const victim = players.find(pl => pl.alive && pl.invulnerable <= 0 && Math.hypot(p.x-pl.x,p.y-pl.y) < 20);
+      if(victim) {
+        victim.hp = Math.max(0, victim.hp-p.dmg);
+        victim.invulnerable = 1000;
         p.life = 0;
-        createParticles(player.x, player.y, '#f00', 10);
+        createParticles(victim.x, victim.y, '#f00', 10);
         sounds.playerHurt();
       }
     }
@@ -1238,35 +1408,48 @@ function update(dt){
   // Remove dead enemies
   enemies = enemies.filter(e=>e.hp>0);
   
-  // Game over - stop the loop and show the modal
-  if(player.hp <= 0){
+  // Players who ran out of health are down until the next wave
+  players.forEach(p => { if(p.hp <= 0) p.alive = false; });
+  
+  // Game over once everyone is down - stop the loop and show the modal
+  if(players.every(p => !p.alive)){
     endGame();
   }
   
-  // Update HUD - Sanitize all values to prevent XSS
-  document.getElementById('hp').textContent = Math.floor(player.hp);
-  document.getElementById('wave').textContent = Math.floor(wave);
-  document.getElementById('form').textContent = String(player.form).charAt(0).toUpperCase() + String(player.form).slice(1);
-  document.getElementById('scoreVal').textContent = Math.floor(player.score);
+  updateHud();
 }
 
+/* ---------- RENDER ---------- */
+const PLAYER_COLORS = ['#0ff', '#fa0'];
+
 function render(){
+  updateCamera();
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,cvs.width,cvs.height);
+  // Everything below is drawn in world coordinates
+  ctx.setTransform(world.scale,0,0,world.scale,world.ox,world.oy);
+  const multi = net.mode !== 'solo';
   
   // Grid background
   ctx.strokeStyle = 'rgba(0,255,255,0.05)';
   ctx.lineWidth = 1;
-  for(let x=0; x<cvs.width; x+=50) {
+  for(let x=0; x<world.w; x+=50) {
     ctx.beginPath();
     ctx.moveTo(x,0);
-    ctx.lineTo(x,cvs.height);
+    ctx.lineTo(x,world.h);
     ctx.stroke();
   }
-  for(let y=0; y<cvs.height; y+=50) {
+  for(let y=0; y<world.h; y+=50) {
     ctx.beginPath();
     ctx.moveTo(0,y);
-    ctx.lineTo(cvs.width,y);
+    ctx.lineTo(world.w,y);
     ctx.stroke();
+  }
+  if(multi) {
+    // Mark the shared playfield, since the canvas may be letterboxed around it
+    ctx.strokeStyle = 'rgba(0,255,255,0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, world.w, world.h);
   }
   
   // Draw pickups
@@ -1300,63 +1483,90 @@ function render(){
   });
   
   // Draw pets
-  player.pets.forEach((p, i)=>{
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.scale(0.5, 0.5);
-    
-    // Draw mini versions of aliens as pets
-    if(i === 0) { // Stinkfly
-      ctx.fillStyle = '#0f8';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI*2);
-      ctx.fill();
-      // Wings
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.ellipse(-15, 0, 10, 20, -Math.PI/4, 0, Math.PI*2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(15, 0, 10, 20, Math.PI/4, 0, Math.PI*2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    } else if(i === 1) { // Mini Heatblast
-      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 15);
-      gradient.addColorStop(0, '#ff0');
-      gradient.addColorStop(1, '#f50');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(0, 0, 12, 0, Math.PI*2);
-      ctx.fill();
-    } else { // Grey Matter
-      ctx.fillStyle = '#88f';
-      ctx.beginPath();
-      ctx.ellipse(0, -5, 12, 15, 0, 0, Math.PI*2);
-      ctx.fill();
-      // Big eyes
-      ctx.fillStyle = '#000';
-      ctx.fillRect(-6, -5, 5, 6);
-      ctx.fillRect(1, -5, 5, 6);
-    }
-    
-    ctx.restore();
+  players.forEach(pl => {
+    if(!pl.alive) return;
+    pl.pets.forEach((p, i)=>{
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(0.5, 0.5);
+      
+      // Draw mini versions of aliens as pets
+      if(i === 0) { // Stinkfly
+        ctx.fillStyle = '#0f8';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Wings
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.ellipse(-15, 0, 10, 20, -Math.PI/4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(15, 0, 10, 20, Math.PI/4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if(i === 1) { // Mini Heatblast
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 15);
+        gradient.addColorStop(0, '#ff0');
+        gradient.addColorStop(1, '#f50');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI*2);
+        ctx.fill();
+      } else { // Grey Matter
+        ctx.fillStyle = '#88f';
+        ctx.beginPath();
+        ctx.ellipse(0, -5, 12, 15, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Big eyes
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-6, -5, 5, 6);
+        ctx.fillRect(1, -5, 5, 6);
+      }
+      
+      ctx.restore();
+    });
   });
   
-  // Draw player
-  if(player.invulnerable > 0 && Math.floor(player.invulnerable/100) % 2) {
-    ctx.globalAlpha = 0.5;
-  }
-  
-  drawAlienSprite(player.x, player.y, player.form, 1);
-  ctx.globalAlpha = 1;
-  
-  // Health bar
-  const barWidth = 40;
-  const barHeight = 4;
-  ctx.fillStyle = '#333';
-  ctx.fillRect(player.x-barWidth/2, player.y-35, barWidth, barHeight);
-  ctx.fillStyle = '#0f0';
-  ctx.fillRect(player.x-barWidth/2, player.y-35, barWidth*(player.hp/player.maxHp), barHeight);
+  // Draw players
+  players.forEach(pl => {
+    ctx.save();
+    if(!pl.alive) {
+      // Down until the next wave
+      ctx.globalAlpha = 0.25;
+      drawAlienSprite(pl.x, pl.y, pl.form, 1, pl.facing);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('DOWN', pl.x, pl.y-35);
+      ctx.restore();
+      return;
+    }
+    
+    if(pl.invulnerable > 0 && Math.floor(pl.invulnerable/100) % 2) {
+      ctx.globalAlpha = 0.5;
+    }
+    drawAlienSprite(pl.x, pl.y, pl.form, 1, pl.facing);
+    ctx.globalAlpha = 1;
+    
+    // Health bar
+    const barWidth = 40;
+    const barHeight = 4;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(pl.x-barWidth/2, pl.y-35, barWidth, barHeight);
+    ctx.fillStyle = '#0f0';
+    ctx.fillRect(pl.x-barWidth/2, pl.y-35, barWidth*(pl.hp/pl.maxHp), barHeight);
+    
+    if(multi) {
+      // Name tag so each player can tell who is who
+      ctx.fillStyle = PLAYER_COLORS[pl.idx] || '#fff';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(pl === localPlayer() ? 'YOU' : 'P' + (pl.idx+1), pl.x, pl.y-40);
+    }
+    ctx.restore();
+  });
   
   // Draw enemies
   enemies.forEach(e=>{
@@ -1389,8 +1599,9 @@ function render(){
     // Draw timer countdown
     if(omniTimer > 0) {
       ctx.save();
-      const cx = isMobile ? cvs.width/2 : player.x;
-      const cy = isMobile ? cvs.height/2 : player.y - 100;
+      const me = localPlayer();
+      const cx = isMobile ? viewCenter().x : me.x;
+      const cy = isMobile ? viewCenter().y : me.y - 100;
       const timerRadius = isMobile ? 115 : 95;
       
       ctx.strokeStyle = 'rgba(0,255,0,0.5)';
@@ -1402,5 +1613,3 @@ function render(){
     }
   }
 }
-
-// Game will start when start button is clicked
