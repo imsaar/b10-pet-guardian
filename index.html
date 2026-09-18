@@ -43,6 +43,16 @@
       <div class="hud-item">Wave: <span id="wave">1</span></div>
       <div class="hud-item"><span id="form">Ben</span></div>
       <button id="muteBtn">🔊</button>
+      <button id="hudRestartBtn" title="Restart" hidden>🔄</button>
+    </div>
+    <div id="gameOverModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle" hidden>
+      <div class="modal">
+        <button id="gameOverClose" class="modal-close" aria-label="Close">&times;</button>
+        <h2 id="gameOverTitle">Game Over</h2>
+        <p>Score: <span id="finalScore">0</span></p>
+        <p>You reached wave <span id="finalWave">1</span></p>
+        <button id="restartBtn">Play Again</button>
+      </div>
     </div>
     <div id="controls" style="display: none;">
       <div id="joystick"><div id="joystickKnob"></div></div>

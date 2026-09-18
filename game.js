@@ -66,11 +66,60 @@ function showControls() {
 
 // Start game function
 function startGame() {
+  if (gameStarted) return;
+  resetGame();
   gameStarted = true;
   document.getElementById('startScreen').style.display = 'none';
   document.getElementById('hud').style.display = 'flex';
   showControls();
   requestAnimationFrame(gameLoop);
+}
+
+// Reset all run state back to a fresh game
+function resetGame() {
+  Object.assign(player, {
+    x:400, y:300, hp:aliens.ben.hp, maxHp:aliens.ben.hp,
+    form:'ben', cooldown:0, invulnerable:0, score:0,
+    facing:1, moving:false
+  });
+  player.pets.forEach(p => p.cooldown = 0);
+  enemies = [];
+  projectiles = [];
+  particles = [];
+  pickups = [];
+  wave = 1;
+  omniOpen = false;
+  omniTimer = 0;
+
+  // Clear held inputs so nothing is stuck from the previous run
+  Object.keys(keys).forEach(k => keys[k] = false);
+  joystickActive = false;
+  joystickVector = {x:0,y:0};
+  const knob = document.getElementById('joystickKnob');
+  knob.style.left = '32.5px';
+  knob.style.top = '32.5px';
+  document.getElementById('omniBtn').classList.remove('active');
+  document.getElementById('omniHelp').style.display = 'none';
+}
+
+// Game over modal
+function endGame() {
+  gameStarted = false;
+  document.getElementById('finalScore').textContent = Math.floor(player.score);
+  document.getElementById('finalWave').textContent = Math.floor(wave);
+  document.getElementById('gameOverModal').hidden = false;
+  document.getElementById('restartBtn').focus();
+}
+
+function dismissGameOver() {
+  document.getElementById('gameOverModal').hidden = true;
+  document.getElementById('hudRestartBtn').hidden = false;
+}
+
+function restartGame() {
+  document.getElementById('gameOverModal').hidden = true;
+  document.getElementById('hudRestartBtn').hidden = true;
+  startGame();
 }
 
 // Initialize when DOM is ready
@@ -102,6 +151,18 @@ document.addEventListener('DOMContentLoaded', function() {
     startGame();
   });
   
+  // Game over modal listeners
+  const gameOverModal = document.getElementById('gameOverModal');
+  document.getElementById('restartBtn').addEventListener('click', restartGame);
+  document.getElementById('hudRestartBtn').addEventListener('click', restartGame);
+  document.getElementById('gameOverClose').addEventListener('click', dismissGameOver);
+  gameOverModal.addEventListener('click', e => {
+    if (e.target === gameOverModal) dismissGameOver();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && !gameOverModal.hidden) dismissGameOver();
+  });
+
   // Mute button functionality
   const muteBtn = document.getElementById('muteBtn');
   muteBtn.addEventListener('click', () => {
@@ -1177,10 +1238,9 @@ function update(dt){
   // Remove dead enemies
   enemies = enemies.filter(e=>e.hp>0);
   
-  // Game over - Sanitize values in alert
+  // Game over - stop the loop and show the modal
   if(player.hp <= 0){
-    alert(`Game Over! Score: ${Math.floor(player.score)}\nYou reached wave ${Math.floor(wave)}`);
-    location.reload();
+    endGame();
   }
   
   // Update HUD - Sanitize all values to prevent XSS
