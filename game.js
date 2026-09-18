@@ -1046,6 +1046,13 @@ function readLocalInput() {
     aimY = nearest.y;
   }
   
+  // Space fires along the movement direction (horizontal, vertical or diagonal
+  // from the arrow/WASD keys) instead of toward the mouse; standing still keeps mouse aim
+  if(keys['Space'] && !keys['Mouse0'] && !keys['Attack'] && !joystickActive && (dx || dy)) {
+    aimX = me.x + dx*200;
+    aimY = me.y + dy*200;
+  }
+
   return {
     dx, dy,
     attack: !!(keys['Mouse0'] || keys['Attack'] || keys['Space']) && !omniOpen,
